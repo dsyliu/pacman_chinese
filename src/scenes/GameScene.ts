@@ -20,7 +20,8 @@ export class GameScene extends Phaser.Scene {
   private mazeHeight: number = 0;
   private gameOverText: Phaser.GameObjects.Text | null = null;
   private victoryText: Phaser.GameObjects.Text | null = null;
-  private restartText: Phaser.GameObjects.Text | null = null;
+  private gameOverRestartText: Phaser.GameObjects.Text | null = null;
+  private victoryRestartText: Phaser.GameObjects.Text | null = null;
   private walls: boolean[][] = []; // 2D array: kept for compatibility but all false (no walls)
 
   constructor() {
@@ -254,21 +255,21 @@ export class GameScene extends Phaser.Scene {
       );
       this.gameOverText.setOrigin(0.5, 0.5);
 
-      this.restartText = this.add.text(
+      this.gameOverRestartText = this.add.text(
         screenWidth / 2,
         screenHeight / 2 + 50,
         'Press Space to Restart',
         {
           fontSize: '32px',
-          color: '#FFFFFF',
+          color: '#FF0000', // Red color for game over
           fontFamily: 'Arial, sans-serif'
         }
       );
-      this.restartText.setOrigin(0.5, 0.5);
+      this.gameOverRestartText.setOrigin(0.5, 0.5);
     } else {
       this.gameOverText.setVisible(true);
-      if (this.restartText) {
-        this.restartText.setVisible(true);
+      if (this.gameOverRestartText) {
+        this.gameOverRestartText.setVisible(true);
       }
     }
   }
@@ -295,21 +296,21 @@ export class GameScene extends Phaser.Scene {
       );
       this.victoryText.setOrigin(0.5, 0.5);
 
-      this.restartText = this.add.text(
+      this.victoryRestartText = this.add.text(
         screenWidth / 2,
         screenHeight / 2 + 50,
         'Press SPACE to Restart',
         {
           fontSize: '32px',
-          color: '#FFFFFF',
+          color: '#00FF00', // Green color for victory
           fontFamily: 'Arial, sans-serif'
         }
       );
-      this.restartText.setOrigin(0.5, 0.5);
+      this.victoryRestartText.setOrigin(0.5, 0.5);
     } else {
       this.victoryText.setVisible(true);
-      if (this.restartText) {
-        this.restartText.setVisible(true);
+      if (this.victoryRestartText) {
+        this.victoryRestartText.setVisible(true);
       }
     }
   }
@@ -335,8 +336,11 @@ export class GameScene extends Phaser.Scene {
     if (this.victoryText) {
       this.victoryText.setVisible(false);
     }
-    if (this.restartText) {
-      this.restartText.setVisible(false);
+    if (this.gameOverRestartText) {
+      this.gameOverRestartText.setVisible(false);
+    }
+    if (this.victoryRestartText) {
+      this.victoryRestartText.setVisible(false);
     }
 
     // Randomly select a new level
