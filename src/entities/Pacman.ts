@@ -45,7 +45,8 @@ export class Pacman extends Phaser.GameObjects.Container {
     }
 
     scene.add.existing(this);
-    this.setSize(this.gridSize, this.gridSize);
+    // Set size larger to accommodate bigger Pacman
+    this.setSize(this.gridSize + 8, this.gridSize + 8);
   }
 
 
@@ -86,7 +87,7 @@ export class Pacman extends Phaser.GameObjects.Container {
       // Keep Pacman within screen bounds
       const screenWidth = this.scene.cameras.main.width;
       const screenHeight = this.scene.cameras.main.height - 150;
-      const radius = this.gridSize / 2;
+      const radius = this.gridSize / 2 + 4; // Match the draw radius
       
       this.x = Phaser.Math.Clamp(this.x, radius, screenWidth - radius);
       this.y = Phaser.Math.Clamp(this.y, radius, screenHeight - radius);
@@ -112,7 +113,7 @@ export class Pacman extends Phaser.GameObjects.Container {
   private draw(): void {
     this.graphics.clear();
     
-    const radius = this.gridSize / 2 - 2;
+    const radius = this.gridSize / 2 + 4; // Make Pacman bigger (was -2, now +4)
     const centerX = 0;
     const centerY = 0;
 

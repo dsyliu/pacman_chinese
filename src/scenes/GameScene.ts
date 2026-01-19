@@ -23,6 +23,7 @@ export class GameScene extends Phaser.Scene {
   private gameOverRestartText: Phaser.GameObjects.Text | null = null;
   private victoryRestartText: Phaser.GameObjects.Text | null = null;
   private walls: boolean[][] = []; // 2D array: kept for compatibility but all false (no walls)
+  private borderGraphics: Phaser.GameObjects.Graphics | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -92,6 +93,46 @@ export class GameScene extends Phaser.Scene {
         this.walls[y][x] = false; // All open space
       }
     }
+
+    // Draw neon blue border like real Pacman game
+    this.drawBorder();
+  }
+
+  private drawBorder(): void {
+    // Destroy existing border if it exists
+    if (this.borderGraphics) {
+      this.borderGraphics.destroy();
+    }
+
+    this.borderGraphics = this.add.graphics();
+    
+    // Neon navy blue color (#0066FF)
+    const borderColor = 0x0066FF;
+    const borderWidth = 4;
+    const borderPadding = 2; // Padding from screen edge
+    
+    const screenWidth = this.cameras.main.width;
+    const screenHeight = this.cameras.main.height - 150;
+    
+    // Draw border rectangle
+    this.borderGraphics.lineStyle(borderWidth, borderColor, 1);
+    
+    // Draw outer border
+    this.borderGraphics.strokeRect(
+      borderPadding,
+      borderPadding,
+      screenWidth - borderPadding * 2,
+      screenHeight - borderPadding * 2
+    );
+    
+    // Add inner glow effect (lighter navy blue inner line)
+    this.borderGraphics.lineStyle(2, 0x3399FF, 0.6);
+    this.borderGraphics.strokeRect(
+      borderPadding + 2,
+      borderPadding + 2,
+      screenWidth - (borderPadding + 2) * 2,
+      screenHeight - (borderPadding + 2) * 2
+    );
   }
 
   private setupPacman(): void {
@@ -361,6 +402,7 @@ export class GameScene extends Phaser.Scene {
     this.gameStateManager.reset();
     
     // Reinitialize everything with new level
+    this.setupMaze(); // Redraw border
     this.setupPacman();
     this.spawnGhosts();
     this.sentenceManager.initialize(this.levelData); // This will re-render the sentence

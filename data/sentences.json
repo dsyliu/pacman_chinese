@@ -29,7 +29,7 @@
       "sentence": "上山找  ",
       "blanks": [3,4],
       "correctChars": ["老", "虎"],
-      "wrongChars": ["松","鼠", "雞", "幾", "朋", "友", "他", "她", "它"],
+      "wrongChars": ["松","鼠", "雞", "幾", "朋"],
       "translation": "Find a tiger in the mountain"
     }
   ]
