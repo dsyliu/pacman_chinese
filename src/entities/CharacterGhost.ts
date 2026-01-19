@@ -6,7 +6,7 @@ export class CharacterGhost extends Phaser.GameObjects.Container {
   private char: string;
   private gridSize: number = 32;
   private collected: boolean = false;
-  private speed: number = 80;
+  private speed: number = 180; // Increased ghost speed
   private currentDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
   private directionChangeTimer: number = 0;
 

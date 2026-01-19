@@ -4,7 +4,7 @@ export class Pacman extends Phaser.GameObjects.Container {
   private graphics: Phaser.GameObjects.Graphics;
   private mouthAngle: number = 0;
   private mouthOpen: boolean = true;
-  private speed: number = 150;
+  private speed: number = 120; // Decreased speed for Pacman
   private gridSize: number = 32;
   public currentDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
   private nextDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
