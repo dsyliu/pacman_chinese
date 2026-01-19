@@ -16,6 +16,9 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   input: {
     keyboard: true
+  },
+  audio: {
+    disableWebAudio: false
   }
 };
 

@@ -2,11 +2,11 @@
   "levels": [
     {
       "id": 1,
-      "sentence": "我 你",
-      "blanks": [1],
-      "correctChars": ["愛"],
-      "wrongChars": ["恨", "怕", "想", "看", "打"],
-      "translation": "I love you"
+      "sentence": "一 三 五",
+      "blanks": [1,3],
+      "correctChars": ["二", "四"],
+      "wrongChars": ["六", "七", "八", "九", "十"],
+      "translation": "One two three four five"
     },
     {
       "id": 2,
@@ -26,11 +26,11 @@
     },
     {
       "id": 4,
-      "sentence": "我 你 ",
-      "blanks": [1, 3],
-      "correctChars": ["愛", "們"],
-      "wrongChars": ["恨", "怕", "想", "看", "打", "他", "她", "它"],
-      "translation": "I love you all"
+      "sentence": "上山找  ",
+      "blanks": [3,4],
+      "correctChars": ["老", "虎"],
+      "wrongChars": ["松","鼠", "雞", "幾", "朋", "友", "他", "她", "它"],
+      "translation": "Find a tiger in the mountain"
     }
   ]
 }

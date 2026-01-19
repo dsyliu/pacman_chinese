@@ -4,6 +4,7 @@ import { CharacterGhost } from '../entities/CharacterGhost';
 import { SentenceManager } from '../managers/SentenceManager';
 import { GameStateManager } from '../managers/GameState';
 import { DataLoader } from '../managers/DataLoader';
+import { AudioManager } from '../managers/AudioManager';
 import { GameState } from '../utils/types';
 import type { LevelData } from '../utils/types';
 
@@ -12,6 +13,7 @@ export class GameScene extends Phaser.Scene {
   private ghosts: CharacterGhost[] = [];
   private sentenceManager!: SentenceManager;
   private gameStateManager!: GameStateManager;
+  private audioManager!: AudioManager;
   private levelData: LevelData | null = null;
   private gridSize: number = 32;
   private mazeWidth: number = 0;
@@ -42,6 +44,7 @@ export class GameScene extends Phaser.Scene {
     // Initialize managers
     this.gameStateManager = new GameStateManager();
     this.sentenceManager = new SentenceManager(this);
+    this.audioManager = new AudioManager(this);
 
     // Load level data (randomly select a level)
     const gameData = await DataLoader.loadData();
@@ -63,6 +66,9 @@ export class GameScene extends Phaser.Scene {
     this.spawnGhosts();
     this.sentenceManager.initialize(this.levelData);
     this.gameStateManager.initializeLevel(this.levelData.correctChars.length);
+    
+    // Start background music
+    this.audioManager.playBackgroundMusic();
 
     // Setup input for restart (spacebar)
     this.input.keyboard!.on('keydown-SPACE', () => {
@@ -229,6 +235,9 @@ export class GameScene extends Phaser.Scene {
   private gameOver(): void {
     this.gameStateManager.setState(GameState.GAME_OVER);
     
+    // Play game over music
+    this.audioManager.playGameOverMusic();
+    
     if (!this.gameOverText) {
       const screenWidth = this.cameras.main.width;
       const screenHeight = this.cameras.main.height;
@@ -266,6 +275,9 @@ export class GameScene extends Phaser.Scene {
 
   private victory(): void {
     this.gameStateManager.setState(GameState.VICTORY);
+    
+    // Play victory music
+    this.audioManager.playVictoryMusic();
     
     if (!this.victoryText) {
       const screenWidth = this.cameras.main.width;
@@ -349,5 +361,8 @@ export class GameScene extends Phaser.Scene {
     this.spawnGhosts();
     this.sentenceManager.initialize(this.levelData); // This will re-render the sentence
     this.gameStateManager.initializeLevel(this.levelData.correctChars.length);
+    
+    // Restart background music
+    this.audioManager.playBackgroundMusic();
   }
 }
