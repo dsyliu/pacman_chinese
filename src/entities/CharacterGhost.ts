@@ -9,6 +9,8 @@ export class CharacterGhost extends Phaser.GameObjects.Container {
   private speed: number = 250; // Increased ghost speed
   private currentDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
   private directionChangeTimer: number = 0;
+  private rotationTimer: number = 0;
+  private rotationInterval: number = 0; // Random interval for each ghost
 
   constructor(
     scene: Phaser.Scene,
@@ -38,6 +40,9 @@ export class CharacterGhost extends Phaser.GameObjects.Container {
 
     scene.add.existing(this);
     this.setSize(this.gridSize, this.gridSize);
+    
+    // Initialize random rotation interval (between 1-3 seconds)
+    this.rotationInterval = 1000 + Math.random() * 2000;
   }
 
   getCharacter(): string {
@@ -74,11 +79,20 @@ export class CharacterGhost extends Phaser.GameObjects.Container {
     if (this.collected) return;
 
     this.directionChangeTimer += delta;
+    this.rotationTimer += delta;
 
     // Change direction periodically
     if (this.directionChangeTimer > 2000) {
       this.chooseRandomDirection();
       this.directionChangeTimer = 0;
+    }
+
+    // Rotate ghost randomly
+    if (this.rotationTimer > this.rotationInterval) {
+      this.rotateRandomly();
+      this.rotationTimer = 0;
+      // Set new random interval for next rotation
+      this.rotationInterval = 1000 + Math.random() * 2000;
     }
 
     // Move ghost (no wall collision - free movement)
@@ -140,5 +154,18 @@ export class CharacterGhost extends Phaser.GameObjects.Container {
 
     const randomDir = Phaser.Utils.Array.GetRandom(directions);
     this.currentDirection.copy(randomDir);
+  }
+
+  private rotateRandomly(): void {
+    // Randomly choose 90, 180, or 270 degrees
+    const rotations = [90, 180, 270];
+    const rotationAngle = Phaser.Utils.Array.GetRandom(rotations);
+    
+    // Convert degrees to radians and add to current rotation
+    const currentRotation = this.rotation;
+    const newRotation = currentRotation + Phaser.Math.DegToRad(rotationAngle);
+    
+    // Normalize rotation to 0-2π range
+    this.setRotation(newRotation % (Math.PI * 2));
   }
 }
