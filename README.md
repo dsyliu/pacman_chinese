@@ -1,10 +1,10 @@
 # Chinese Character Learning Game
 
-An educational browser-based game that helps young students learn Chinese characters through interactive gameplay. Inspired by Pacman, players must collect the correct Chinese characters to complete sentences while avoiding wrong characters.
+An educational browser-based game that helps young students learn Chinese characters through interactive gameplay. Built around a classic Pac-Man-style maze, players navigate corridors to collect the correct Chinese characters that complete sentences while avoiding wrong characters.
 
 ## About the Game
 
-This game combines entertainment with education to make learning Chinese characters fun and engaging. The game displays a sentence with missing characters (shown as empty squares □), and players control Pacman to collect only the correct Chinese character "ghosts" that complete the sentence. Collecting wrong characters results in game over, while collecting all correct characters leads to victory.
+This game combines entertainment with education to make learning Chinese characters fun and engaging. The game displays a sentence with missing characters (shown as empty squares □), and players control Pacman through a 28×31 tile maze to collect only the correct Chinese character "ghosts" that complete the sentence. Collecting wrong characters results in game over, while collecting all correct characters leads to victory.
 
 
 ## Technology Stack
@@ -48,7 +48,7 @@ To run the game in development mode with hot-reloading:
 npm run dev
 ```
 
-The game will be available at `http://localhost:5173` (or another port if 5173 is in use). Open this URL in your web browser to play.
+The game will be available at `http://localhost:3000` (or another port if 3000 is in use). Open this URL in your web browser to play.
 
 ### Production Build
 
@@ -77,11 +77,12 @@ npm run preview
 
 1. A sentence with missing characters is displayed at the bottom of the screen
 2. Missing characters are shown as empty squares (□)
-3. Chinese character "ghosts" move around the screen
-4. Control Pacman to collect only the **correct** characters that complete the sentence
-5. Avoid **wrong** characters - touching them ends the game immediately
-6. Win by collecting all correct characters to complete the sentence
-7. Press **Spacebar** to restart and play a new random level
+3. Chinese character "ghosts" wander through the maze corridors, picking random valid directions at each intersection
+4. Control Pacman through the maze to collect only the **correct** characters that complete the sentence
+5. Pacman is grid-aligned: queue a turn before reaching an intersection and it will turn when the path opens
+6. Avoid **wrong** characters - touching them ends the game immediately
+7. Win by collecting all correct characters to complete the sentence
+8. Press **Spacebar** to restart and play a new random level
 
 ## Customizing Sentences
 
@@ -116,10 +117,11 @@ pacman_chinese/
 │   └── sentences.json          # Sentence data with correct/wrong characters
 ├── src/
 │   ├── entities/
+│   │   ├── Maze.ts             # Maze layout, wall rendering, tile helpers
 │   │   ├── Pacman.ts           # Player character controller
 │   │   └── CharacterGhost.ts  # Chinese character ghost entities
 │   ├── managers/
-│   │   ├── AudioManager.ts    # Music and sound effects
+│   │   ├── AudioManager.ts    # Arcade-style music and sound effects
 │   │   ├── DataLoader.ts      # Loads sentence data from JSON
 │   │   ├── GameState.ts       # Game state management
 │   │   └── SentenceManager.ts # Manages sentence display
