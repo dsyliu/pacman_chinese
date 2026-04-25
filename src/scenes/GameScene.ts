@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Pacman } from '../entities/Pacman';
 import { CharacterGhost } from '../entities/CharacterGhost';
+import { Maze, TILE_SIZE } from '../entities/Maze';
 import { SentenceManager } from '../managers/SentenceManager';
 import { GameStateManager } from '../managers/GameState';
 import { DataLoader } from '../managers/DataLoader';
@@ -8,34 +9,31 @@ import { AudioManager } from '../managers/AudioManager';
 import { GameState } from '../utils/types';
 import type { LevelData } from '../utils/types';
 
+const PACMAN_START_COL = 13;
+const PACMAN_START_ROW = 24;
+const MIN_GHOST_TILES_FROM_PACMAN = 5;
+const MAX_WRONG_GHOSTS = 5;
+
 export class GameScene extends Phaser.Scene {
   private pacman!: Pacman;
   private ghosts: CharacterGhost[] = [];
+  private maze!: Maze;
   private sentenceManager!: SentenceManager;
   private gameStateManager!: GameStateManager;
   private audioManager!: AudioManager;
   private levelData: LevelData | null = null;
-  private gridSize: number = 32;
-  private mazeWidth: number = 0;
-  private mazeHeight: number = 0;
   private gameOverText: Phaser.GameObjects.Text | null = null;
   private victoryText: Phaser.GameObjects.Text | null = null;
   private gameOverRestartText: Phaser.GameObjects.Text | null = null;
   private victoryRestartText: Phaser.GameObjects.Text | null = null;
-  private walls: boolean[][] = []; // 2D array: kept for compatibility but all false (no walls)
-  private borderGraphics: Phaser.GameObjects.Graphics | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
   }
 
   async create() {
-    // Ensure keyboard is enabled
     if (this.input.keyboard) {
-      // Focus the canvas to receive keyboard input
       this.input.keyboard.enabled = true;
-      
-      // Add click handler to focus canvas
       this.input.on('pointerdown', () => {
         if (this.input.keyboard) {
           this.input.keyboard.enabled = true;
@@ -43,12 +41,10 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Initialize managers
     this.gameStateManager = new GameStateManager();
     this.sentenceManager = new SentenceManager(this);
     this.audioManager = new AudioManager(this);
 
-    // Load level data (randomly select a level)
     const gameData = await DataLoader.loadData();
     if (gameData.levels.length > 0) {
       const randomIndex = Math.floor(Math.random() * gameData.levels.length);
@@ -62,142 +58,55 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Setup game world
-    this.setupMaze();
+    this.maze = new Maze(this);
     this.setupPacman();
     this.spawnGhosts();
     this.sentenceManager.initialize(this.levelData);
     this.gameStateManager.initializeLevel(this.levelData.correctChars.length);
-    
-    // Start background music
+
     this.audioManager.playBackgroundMusic();
 
-    // Setup input for restart (spacebar)
     this.input.keyboard!.on('keydown-SPACE', () => {
       this.restart();
     });
   }
 
-  private setupMaze(): void {
-    const screenWidth = this.cameras.main.width;
-    const screenHeight = this.cameras.main.height - 150; // Reserve space for sentence UI
-
-    this.mazeWidth = Math.floor(screenWidth / this.gridSize);
-    this.mazeHeight = Math.floor(screenHeight / this.gridSize);
-
-    // No walls - just calculate dimensions for open space
-    this.walls = [];
-    for (let y = 0; y < this.mazeHeight; y++) {
-      this.walls[y] = [];
-      for (let x = 0; x < this.mazeWidth; x++) {
-        this.walls[y][x] = false; // All open space
-      }
-    }
-
-    // Draw neon blue border like real Pacman game
-    this.drawBorder();
-  }
-
-  private drawBorder(): void {
-    // Destroy existing border if it exists
-    if (this.borderGraphics) {
-      this.borderGraphics.destroy();
-    }
-
-    this.borderGraphics = this.add.graphics();
-    
-    // Neon navy blue color (#0066FF)
-    const borderColor = 0x0066FF;
-    const borderWidth = 4;
-    const borderPadding = 2; // Padding from screen edge
-    
-    const screenWidth = this.cameras.main.width;
-    const screenHeight = this.cameras.main.height - 150;
-    
-    // Draw border rectangle
-    this.borderGraphics.lineStyle(borderWidth, borderColor, 1);
-    
-    // Draw outer border
-    this.borderGraphics.strokeRect(
-      borderPadding,
-      borderPadding,
-      screenWidth - borderPadding * 2,
-      screenHeight - borderPadding * 2
-    );
-    
-    // Add inner glow effect (lighter navy blue inner line)
-    this.borderGraphics.lineStyle(2, 0x3399FF, 0.6);
-    this.borderGraphics.strokeRect(
-      borderPadding + 2,
-      borderPadding + 2,
-      screenWidth - (borderPadding + 2) * 2,
-      screenHeight - (borderPadding + 2) * 2
-    );
-  }
-
   private setupPacman(): void {
-    const startX = (this.mazeWidth / 2) * this.gridSize;
-    const startY = (this.mazeHeight / 2) * this.gridSize;
-    this.pacman = new Pacman(this, startX, startY, this.gridSize);
-    // No walls, so no need to set walls
+    const start = this.maze.tileToWorld(PACMAN_START_COL, PACMAN_START_ROW);
+    this.pacman = new Pacman(this, start.x, start.y, this.maze);
   }
 
   private spawnGhosts(): void {
     if (!this.levelData) return;
 
-    // Clear any existing ghosts first (should already be cleared, but be safe)
-    this.ghosts.forEach(ghost => {
-      if (ghost) {
-        ghost.destroy();
-      }
-    });
+    this.ghosts.forEach(ghost => ghost && ghost.destroy());
     this.ghosts = [];
 
-    // Get Pacman's starting position
-    const pacmanStartX = (this.mazeWidth / 2) * this.gridSize;
-    const pacmanStartY = (this.mazeHeight / 2) * this.gridSize;
-    const minDistance = 20; // Minimum distance from Pacman
+    const allPathTiles = this.maze.getPathTiles();
+    const validTiles = allPathTiles.filter(t => {
+      const dCol = t.col - PACMAN_START_COL;
+      const dRow = t.row - PACMAN_START_ROW;
+      return Math.abs(dCol) + Math.abs(dRow) >= MIN_GHOST_TILES_FROM_PACMAN;
+    });
 
-    // Find valid spawn positions (at least 20 pixels away from Pacman)
-    const validPositions: { x: number; y: number }[] = [];
-    for (let y = 0; y < this.mazeHeight; y++) {
-      for (let x = 0; x < this.mazeWidth; x++) {
-        const worldX = x * this.gridSize;
-        const worldY = y * this.gridSize;
-        const distance = Phaser.Math.Distance.Between(
-          pacmanStartX,
-          pacmanStartY,
-          worldX,
-          worldY
-        );
-        
-        if (distance >= minDistance) {
-          validPositions.push({ x: worldX, y: worldY });
-        }
-      }
-    }
+    const shuffled = Phaser.Utils.Array.Shuffle([...validTiles]);
+    let posIndex = 0;
 
-    // Shuffle positions
-    const shuffled = Phaser.Utils.Array.Shuffle([...validPositions]);
-
-    // Spawn correct character ghosts based on new level data
-    this.levelData.correctChars.forEach((char, index) => {
-      if (index < shuffled.length) {
-        const pos = shuffled[index];
-        const ghost = new CharacterGhost(this, pos.x, pos.y, char, true, this.gridSize);
-        this.ghosts.push(ghost);
+    this.levelData.correctChars.forEach(char => {
+      if (posIndex < shuffled.length) {
+        const tile = shuffled[posIndex++];
+        const world = this.maze.tileToWorld(tile.col, tile.row);
+        this.ghosts.push(new CharacterGhost(this, world.x, world.y, char, true, this.maze));
       }
     });
 
-    // Spawn wrong character ghosts based on new level data
-    const wrongCount = Math.min(this.levelData.wrongChars.length, 5);
+    const wrongCount = Math.min(this.levelData.wrongChars.length, MAX_WRONG_GHOSTS);
     for (let i = 0; i < wrongCount; i++) {
-      const char = this.levelData.wrongChars[i];
-      const posIndex = this.levelData.correctChars.length + i;
       if (posIndex < shuffled.length) {
-        const pos = shuffled[posIndex];
-        const ghost = new CharacterGhost(this, pos.x, pos.y, char, false, this.gridSize);
-        this.ghosts.push(ghost);
+        const tile = shuffled[posIndex++];
+        const world = this.maze.tileToWorld(tile.col, tile.row);
+        const char = this.levelData.wrongChars[i];
+        this.ghosts.push(new CharacterGhost(this, world.x, world.y, char, false, this.maze));
       }
     }
   }
@@ -207,24 +116,20 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Update Pacman
     this.pacman.update(time, delta);
 
-    // Update ghosts (pass all ghosts for collision detection)
     for (const ghost of this.ghosts) {
       if (!ghost.isCollected()) {
-        ghost.update(delta, this.walls, this.ghosts); // Pass all ghosts for collision detection
+        ghost.update(delta);
       }
     }
 
-    // Check collisions
     this.checkCollisions();
   }
 
-
   private checkCollisions(): void {
     const pacmanPos = this.pacman.getWorldPosition();
-    const collisionDistance = this.gridSize * 0.7; // Collision threshold
+    const collisionDistance = TILE_SIZE * 0.7;
 
     for (const ghost of this.ghosts) {
       if (ghost.isCollected()) continue;
@@ -239,10 +144,8 @@ export class GameScene extends Phaser.Scene {
 
       if (distance < collisionDistance) {
         if (ghost.getIsCorrect()) {
-          // Collect correct character
           this.collectCorrectCharacter(ghost);
         } else {
-          // Hit wrong character - game over
           this.gameOver();
           return;
         }
@@ -253,22 +156,16 @@ export class GameScene extends Phaser.Scene {
   private collectCorrectCharacter(ghost: CharacterGhost): void {
     ghost.collect();
 
-    // Find which blank this character fills
     if (!this.levelData) return;
 
     const charIndex = this.levelData.correctChars.indexOf(ghost.getCharacter());
     if (charIndex === -1) return;
 
-    // Get the blank index for this character (support multiple blanks)
-    const blankIndex = charIndex; // Use character index as blank index
-    
-    // Update sentence manager
+    const blankIndex = charIndex;
+
     this.sentenceManager.collectCharacter(ghost.getCharacter(), blankIndex);
-    
-    // Update game state
     this.gameStateManager.collectCharacter(ghost.getCharacter(), blankIndex);
 
-    // Check for victory
     if (this.gameStateManager.isAllCollected()) {
       this.victory();
     }
@@ -276,14 +173,12 @@ export class GameScene extends Phaser.Scene {
 
   private gameOver(): void {
     this.gameStateManager.setState(GameState.GAME_OVER);
-    
-    // Play game over music
     this.audioManager.playGameOverMusic();
-    
+
     if (!this.gameOverText) {
       const screenWidth = this.cameras.main.width;
       const screenHeight = this.cameras.main.height;
-      
+
       this.gameOverText = this.add.text(
         screenWidth / 2,
         screenHeight / 2 - 50,
@@ -302,7 +197,7 @@ export class GameScene extends Phaser.Scene {
         'Press Space to Restart',
         {
           fontSize: '32px',
-          color: '#FF0000', // Red color for game over
+          color: '#FF0000',
           fontFamily: 'Arial, sans-serif'
         }
       );
@@ -317,14 +212,12 @@ export class GameScene extends Phaser.Scene {
 
   private victory(): void {
     this.gameStateManager.setState(GameState.VICTORY);
-    
-    // Play victory music
     this.audioManager.playVictoryMusic();
-    
+
     if (!this.victoryText) {
       const screenWidth = this.cameras.main.width;
       const screenHeight = this.cameras.main.height;
-      
+
       this.victoryText = this.add.text(
         screenWidth / 2,
         screenHeight / 2 - 50,
@@ -343,7 +236,7 @@ export class GameScene extends Phaser.Scene {
         'Press SPACE to Restart',
         {
           fontSize: '32px',
-          color: '#00FF00', // Green color for victory
+          color: '#00FF00',
           fontFamily: 'Arial, sans-serif'
         }
       );
@@ -357,34 +250,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async restart(): Promise<void> {
-    // Clean up existing game objects
     if (this.pacman) {
       this.pacman.destroy();
     }
-    
-    // Destroy all ghosts
-    this.ghosts.forEach(ghost => {
-      if (ghost) {
-        ghost.destroy();
-      }
-    });
-    this.ghosts = [];
-    
-    // Hide game over/victory text
-    if (this.gameOverText) {
-      this.gameOverText.setVisible(false);
-    }
-    if (this.victoryText) {
-      this.victoryText.setVisible(false);
-    }
-    if (this.gameOverRestartText) {
-      this.gameOverRestartText.setVisible(false);
-    }
-    if (this.victoryRestartText) {
-      this.victoryRestartText.setVisible(false);
-    }
 
-    // Randomly select a new level
+    this.ghosts.forEach(ghost => ghost && ghost.destroy());
+    this.ghosts = [];
+
+    if (this.gameOverText) this.gameOverText.setVisible(false);
+    if (this.victoryText) this.victoryText.setVisible(false);
+    if (this.gameOverRestartText) this.gameOverRestartText.setVisible(false);
+    if (this.victoryRestartText) this.victoryRestartText.setVisible(false);
+
     const gameData = await DataLoader.loadData();
     if (gameData.levels.length > 0) {
       const randomIndex = Math.floor(Math.random() * gameData.levels.length);
@@ -398,17 +275,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // Reset game state
     this.gameStateManager.reset();
-    
-    // Reinitialize everything with new level
-    this.setupMaze(); // Redraw border
+
     this.setupPacman();
     this.spawnGhosts();
-    this.sentenceManager.initialize(this.levelData); // This will re-render the sentence
+    this.sentenceManager.initialize(this.levelData);
     this.gameStateManager.initializeLevel(this.levelData.correctChars.length);
-    
-    // Restart background music
+
     this.audioManager.playBackgroundMusic();
   }
 }

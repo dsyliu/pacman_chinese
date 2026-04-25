@@ -4,6 +4,7 @@ export class AudioManager {
   private isMuted: boolean = false;
   private audioContext: AudioContext | null = null;
   private backgroundMusicInterval: number | null = null;
+  private nextPatternTime: number = 0;
 
   constructor(_scene: Phaser.Scene) {
     this.initializeAudio();
@@ -19,50 +20,64 @@ export class AudioManager {
     }
   }
 
+  private playNote(
+    frequency: number,
+    startTime: number,
+    duration: number,
+    gain: number = 0.08,
+    type: OscillatorType = 'square'
+  ): void {
+    if (!this.audioContext) return;
+    const osc = this.audioContext.createOscillator();
+    const g = this.audioContext.createGain();
+    osc.connect(g);
+    g.connect(this.audioContext.destination);
+    osc.type = type;
+    osc.frequency.value = frequency;
+    g.gain.setValueAtTime(0, startTime);
+    g.gain.linearRampToValueAtTime(gain, startTime + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.02);
+  }
+
   private createBackgroundMusic(): void {
     if (!this.audioContext) return;
 
-    // Create a pleasant background melody using multiple oscillators
-    const playNote = (frequency: number, startTime: number, duration: number) => {
-      const oscillator = this.audioContext!.createOscillator();
-      const gainNode = this.audioContext!.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(this.audioContext!.destination);
-      
-      oscillator.frequency.value = frequency;
-      oscillator.type = 'sine';
-      
-      gainNode.gain.setValueAtTime(0, startTime);
-      gainNode.gain.linearRampToValueAtTime(0.1, startTime + 0.01);
-      gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
-      
-      oscillator.start(startTime);
-      oscillator.stop(startTime + duration);
-    };
+    // Classic Pac-Man-style intro melody (4 phrases ascending by half-step)
+    const REST = 0;
+    const melody = [
+      // Phrase 1
+      523.25, 1046.50, 783.99, 659.25, 1046.50, 783.99, 659.25, REST,
+      // Phrase 2 (up a half-step)
+      554.37, 1108.73, 830.61, 698.46, 1108.73, 830.61, 698.46, REST,
+      // Phrase 3 (up another half-step)
+      587.33, 1174.66, 880.00, 698.46, 1174.66, 880.00, 698.46, REST,
+      // Phrase 4 (chromatic walk-up resolution)
+      622.25, 659.25, 698.46, 698.46, 739.99, 783.99, 830.61, 880.00
+    ];
 
-    // Simple melody pattern (C, E, G, C - C major chord progression)
-    const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
-    let currentTime = this.audioContext.currentTime;
-    const noteDuration = 0.3;
-    const patternDuration = noteDuration * notes.length;
+    const noteDuration = 0.11;
+    const patternDuration = melody.length * noteDuration;
 
-    const playPattern = () => {
-      notes.forEach((freq, index) => {
-        playNote(freq, currentTime + index * noteDuration, noteDuration * 0.8);
+    const schedulePattern = (startTime: number) => {
+      melody.forEach((freq, i) => {
+        if (freq === REST) return;
+        this.playNote(freq, startTime + i * noteDuration, noteDuration * 0.85);
       });
-      currentTime += patternDuration;
     };
 
-    // Start the pattern
-    playPattern();
-    
-    // Repeat the pattern
+    this.nextPatternTime = this.audioContext.currentTime + 0.05;
+    schedulePattern(this.nextPatternTime);
+    this.nextPatternTime += patternDuration;
+
     this.backgroundMusicInterval = window.setInterval(() => {
-      if (!this.isMuted) {
-        playPattern();
+      if (this.isMuted || !this.audioContext) return;
+      if (this.nextPatternTime - this.audioContext.currentTime < 0.4) {
+        schedulePattern(this.nextPatternTime);
+        this.nextPatternTime += patternDuration;
       }
-    }, patternDuration * 1000);
+    }, 200);
   }
 
   private createVictoryMusic(): void {

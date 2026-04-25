@@ -1,41 +1,38 @@
 import Phaser from 'phaser';
+import { Maze, TILE_SIZE } from './Maze';
 
 export class Pacman extends Phaser.GameObjects.Container {
   private graphics: Phaser.GameObjects.Graphics;
   private mouthAngle: number = 0;
   private mouthOpen: boolean = true;
-  private speed: number = 150;
-  private gridSize: number = 32;
+  private speed: number = 160;
+  private maze: Maze;
   public currentDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
-  private nextDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
+  private queuedDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
-
   private wasdKeys: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
+  private radius: number;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, gridSize: number = 32) {
+  constructor(scene: Phaser.Scene, x: number, y: number, maze: Maze) {
     super(scene, x, y);
-    this.gridSize = gridSize;
-    
-    // Create graphics for Pacman
+    this.maze = maze;
+    this.radius = TILE_SIZE / 2 - 2;
+
     this.graphics = scene.add.graphics();
     this.add(this.graphics);
 
-    // Setup input - ensure keyboard exists
     if (scene.input.keyboard) {
       this.cursors = scene.input.keyboard.createCursorKeys();
-      
-      // Add WASD support using addKeys
       const wasd = scene.input.keyboard.addKeys('W,S,A,D') as any;
       this.wasdKeys = {
         up: wasd.W,
         down: wasd.S,
         left: wasd.A,
         right: wasd.D,
-        space: wasd.W, // Dummy
-        shift: wasd.W  // Dummy
+        space: wasd.W,
+        shift: wasd.W
       } as Phaser.Types.Input.Keyboard.CursorKeys;
     } else {
-      // Fallback if keyboard not available
       this.cursors = {
         left: { isDown: false },
         right: { isDown: false },
@@ -45,65 +42,75 @@ export class Pacman extends Phaser.GameObjects.Container {
     }
 
     scene.add.existing(this);
-    // Set size larger to accommodate bigger Pacman
-    this.setSize(this.gridSize + 8, this.gridSize + 8);
+    this.setSize(TILE_SIZE, TILE_SIZE);
   }
 
-
   update(_time: number, delta: number): void {
-    // Handle input - check both arrow keys and WASD
-    const leftPressed = this.cursors.left.isDown || (this.wasdKeys && this.wasdKeys.left.isDown);
-    const rightPressed = this.cursors.right.isDown || (this.wasdKeys && this.wasdKeys.right.isDown);
-    const upPressed = this.cursors.up.isDown || (this.wasdKeys && this.wasdKeys.up.isDown);
-    const downPressed = this.cursors.down.isDown || (this.wasdKeys && this.wasdKeys.down.isDown);
+    const left = this.cursors.left.isDown || !!(this.wasdKeys && this.wasdKeys.left.isDown);
+    const right = this.cursors.right.isDown || !!(this.wasdKeys && this.wasdKeys.right.isDown);
+    const up = this.cursors.up.isDown || !!(this.wasdKeys && this.wasdKeys.up.isDown);
+    const down = this.cursors.down.isDown || !!(this.wasdKeys && this.wasdKeys.down.isDown);
 
-    // Set next direction based on input
-    if (leftPressed) {
-      this.nextDirection.set(-1, 0);
-    } else if (rightPressed) {
-      this.nextDirection.set(1, 0);
-    } else if (upPressed) {
-      this.nextDirection.set(0, -1);
-    } else if (downPressed) {
-      this.nextDirection.set(0, 1);
+    if (left) this.queuedDirection.set(-1, 0);
+    else if (right) this.queuedDirection.set(1, 0);
+    else if (up) this.queuedDirection.set(0, -1);
+    else if (down) this.queuedDirection.set(0, 1);
+
+    if (this.queuedDirection.x === this.currentDirection.x &&
+        this.queuedDirection.y === this.currentDirection.y) {
+      this.queuedDirection.set(0, 0);
     }
 
-    // Update direction immediately when input changes (no walls, so free direction change)
-    if (this.nextDirection.length() > 0) {
-      // Only change if the direction is actually different
-      if (this.currentDirection.x !== this.nextDirection.x || 
-          this.currentDirection.y !== this.nextDirection.y) {
-        this.currentDirection.copy(this.nextDirection);
+    const moveStep = this.speed * delta / 1000;
+    const col = Math.floor(this.x / TILE_SIZE);
+    const row = Math.floor(this.y / TILE_SIZE);
+    const tcx = col * TILE_SIZE + TILE_SIZE / 2;
+    const tcy = row * TILE_SIZE + TILE_SIZE / 2;
+    const tol = Math.max(moveStep, 3);
+    const atCenter = Math.abs(this.x - tcx) <= tol && Math.abs(this.y - tcy) <= tol;
+
+    if (this.queuedDirection.lengthSq() > 0) {
+      const reversing = this.currentDirection.lengthSq() > 0 &&
+        this.queuedDirection.x === -this.currentDirection.x &&
+        this.queuedDirection.y === -this.currentDirection.y;
+
+      if (reversing) {
+        this.currentDirection.copy(this.queuedDirection);
+        this.queuedDirection.set(0, 0);
+      } else if (atCenter) {
+        const nc = col + this.queuedDirection.x;
+        const nr = row + this.queuedDirection.y;
+        if (this.maze.isPath(nc, nr)) {
+          this.x = tcx;
+          this.y = tcy;
+          this.currentDirection.copy(this.queuedDirection);
+          this.queuedDirection.set(0, 0);
+        }
       }
     }
 
-    // Move Pacman (no wall collision - free movement)
-    if (this.currentDirection.length() > 0) {
-      const moveX = this.currentDirection.x * this.speed * (delta / 1000);
-      const moveY = this.currentDirection.y * this.speed * (delta / 1000);
-      this.x += moveX;
-      this.y += moveY;
-      
-      // Keep Pacman within screen bounds
-      const screenWidth = this.scene.cameras.main.width;
-      const screenHeight = this.scene.cameras.main.height - 150;
-      const radius = this.gridSize / 2 + 4; // Match the draw radius
-      
-      this.x = Phaser.Math.Clamp(this.x, radius, screenWidth - radius);
-      this.y = Phaser.Math.Clamp(this.y, radius, screenHeight - radius);
+    if (this.currentDirection.lengthSq() > 0) {
+      if (atCenter) {
+        const nc = col + this.currentDirection.x;
+        const nr = row + this.currentDirection.y;
+        if (this.maze.isWall(nc, nr)) {
+          this.x = tcx;
+          this.y = tcy;
+          this.currentDirection.set(0, 0);
+        }
+      }
+
+      if (this.currentDirection.lengthSq() > 0) {
+        this.x += this.currentDirection.x * moveStep;
+        this.y += this.currentDirection.y * moveStep;
+      }
     }
 
-    // Animate mouth - continuously open/close while moving
-    if (this.currentDirection.length() > 0) {
-      this.mouthAngle += delta * 0.008; // Faster animation when moving
-      if (this.mouthAngle > Math.PI * 2) {
-        this.mouthAngle = 0;
-      }
-      // Use sine wave for smooth open/close animation
-      const mouthOpenness = Math.sin(this.mouthAngle);
-      this.mouthOpen = mouthOpenness > 0;
+    if (this.currentDirection.lengthSq() > 0) {
+      this.mouthAngle += delta * 0.008;
+      if (this.mouthAngle > Math.PI * 2) this.mouthAngle = 0;
+      this.mouthOpen = Math.sin(this.mouthAngle) > 0;
     } else {
-      // When not moving, keep mouth closed
       this.mouthOpen = false;
     }
 
@@ -112,59 +119,44 @@ export class Pacman extends Phaser.GameObjects.Container {
 
   private draw(): void {
     this.graphics.clear();
-    
-    const radius = this.gridSize / 2 + 4; // Make Pacman bigger (was -2, now +4)
-    const centerX = 0;
-    const centerY = 0;
+    const radius = this.radius;
+    const cx = 0;
+    const cy = 0;
 
-    // Draw Pacman circle
-    this.graphics.fillStyle(0xFFFF00); // Yellow
-    
-    // Calculate mouth opening
+    this.graphics.fillStyle(0xFFFF00);
+
     let startAngle = 0;
     let endAngle = Math.PI * 2;
-    
-    // Calculate mouth opening - always point in direction of movement
-    // Angles: 0° = right, 90° = down, 180° = left, 270° = up
-    // Only open mouth when moving
-    if (this.currentDirection.length() > 0 && this.mouthOpen) {
+
+    if (this.currentDirection.lengthSq() > 0 && this.mouthOpen) {
       if (this.currentDirection.x > 0) {
-        // Moving right - mouth gap on right side (0°)
-        // Gap from -45° to 45°, draw from 45° to 315° (wraps)
-        startAngle = 0.25 * Math.PI;  // 45° (top-right)
-        endAngle = 1.75 * Math.PI;   // 315° (bottom-right, wraps around)
+        startAngle = 0.25 * Math.PI;
+        endAngle = 1.75 * Math.PI;
       } else if (this.currentDirection.x < 0) {
-        // Moving left - mouth gap on left side (180°)
-        // Gap from 135° to 225°, draw from 225° to 135° (wraps)
-        startAngle = 1.25 * Math.PI;  // 225° (bottom-left)
-        endAngle = 0.75 * Math.PI + 2 * Math.PI;  // 135° + 360° to wrap correctly
+        startAngle = 1.25 * Math.PI;
+        endAngle = 0.75 * Math.PI + 2 * Math.PI;
       } else if (this.currentDirection.y > 0) {
-        // Moving down - mouth gap on bottom (90°)
-        // Gap from 45° to 135°, draw from 135° to 45° (wraps)
-        startAngle = 0.75 * Math.PI;  // 135° (top-left)
-        endAngle = 0.25 * Math.PI + 2 * Math.PI;  // 45° + 360° to wrap correctly
+        startAngle = 0.75 * Math.PI;
+        endAngle = 0.25 * Math.PI + 2 * Math.PI;
       } else if (this.currentDirection.y < 0) {
-        // Moving up - mouth gap on top (270°)
-        // Gap from 225° to 315°, draw from 315° to 225° (wraps)
-        startAngle = 1.75 * Math.PI;  // 315° (bottom-right)
-        endAngle = 1.25 * Math.PI + 2 * Math.PI;  // 225° + 360° to wrap correctly
+        startAngle = 1.75 * Math.PI;
+        endAngle = 1.25 * Math.PI + 2 * Math.PI;
       }
     }
 
-    // Draw Pacman as a pie slice
     this.graphics.beginPath();
-    this.graphics.moveTo(centerX, centerY);
-    this.graphics.arc(centerX, centerY, radius, startAngle, endAngle);
+    this.graphics.moveTo(cx, cy);
+    this.graphics.arc(cx, cy, radius, startAngle, endAngle);
     this.graphics.closePath();
     this.graphics.fillPath();
   }
 
   getGridX(): number {
-    return Math.round(this.x / this.gridSize);
+    return Math.floor(this.x / TILE_SIZE);
   }
 
   getGridY(): number {
-    return Math.round(this.y / this.gridSize);
+    return Math.floor(this.y / TILE_SIZE);
   }
 
   getWorldPosition(): Phaser.Math.Vector2 {
