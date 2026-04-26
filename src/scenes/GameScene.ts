@@ -190,6 +190,7 @@ export class GameScene extends Phaser.Scene {
         }
       );
       this.gameOverText.setOrigin(0.5, 0.5);
+      this.gameOverText.setDepth(1000);
 
       this.gameOverRestartText = this.add.text(
         screenWidth / 2,
@@ -202,6 +203,7 @@ export class GameScene extends Phaser.Scene {
         }
       );
       this.gameOverRestartText.setOrigin(0.5, 0.5);
+      this.gameOverRestartText.setDepth(1000);
     } else {
       this.gameOverText.setVisible(true);
       if (this.gameOverRestartText) {
@@ -229,6 +231,7 @@ export class GameScene extends Phaser.Scene {
         }
       );
       this.victoryText.setOrigin(0.5, 0.5);
+      this.victoryText.setDepth(1000);
 
       this.victoryRestartText = this.add.text(
         screenWidth / 2,
@@ -241,6 +244,7 @@ export class GameScene extends Phaser.Scene {
         }
       );
       this.victoryRestartText.setOrigin(0.5, 0.5);
+      this.victoryRestartText.setDepth(1000);
     } else {
       this.victoryText.setVisible(true);
       if (this.victoryRestartText) {

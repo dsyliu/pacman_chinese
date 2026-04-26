@@ -82,6 +82,8 @@ export function createTextStub(text: string = '') {
     setOrigin: vi.fn().mockReturnThis(),
     setStroke: vi.fn().mockReturnThis(),
     setVisible: vi.fn().mockReturnThis(),
+    setDepth: vi.fn().mockReturnThis(),
+    setScrollFactor: vi.fn().mockReturnThis(),
     destroy: vi.fn()
   };
 }

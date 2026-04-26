@@ -135,4 +135,43 @@ describe('GameScene', () => {
     expect(correctGhost.isCollected()).toBe(true);
     expect((scene as any).gameStateManager.getScore()).toBe(100);
   });
+
+  it('game-over text is given a high depth so the maze cannot cover it', async () => {
+    const { scene } = await buildGame();
+    const pacman = (scene as any).pacman;
+    const ghosts = (scene as any).ghosts as any[];
+    const wrongGhost = ghosts.find(g => !g.getIsCorrect());
+    wrongGhost.x = pacman.x;
+    wrongGhost.y = pacman.y;
+    scene.update(0, 16);
+
+    const gameOverText = (scene as any).gameOverText;
+    const gameOverRestart = (scene as any).gameOverRestartText;
+    expect(gameOverText.setDepth).toHaveBeenCalled();
+    const depth = gameOverText.setDepth.mock.calls[0][0];
+    expect(depth).toBeGreaterThanOrEqual(1000);
+    expect(gameOverRestart.setDepth).toHaveBeenCalled();
+    const restartDepth = gameOverRestart.setDepth.mock.calls[0][0];
+    expect(restartDepth).toBeGreaterThanOrEqual(1000);
+  });
+
+  it('victory text is given a high depth so the maze cannot cover it', async () => {
+    const { scene } = await buildGame();
+    const pacman = (scene as any).pacman;
+    const ghosts = (scene as any).ghosts as any[];
+    for (const g of ghosts.filter(g => g.getIsCorrect())) {
+      g.x = pacman.x;
+      g.y = pacman.y;
+      scene.update(0, 16);
+    }
+
+    const victoryText = (scene as any).victoryText;
+    const victoryRestart = (scene as any).victoryRestartText;
+    expect(victoryText.setDepth).toHaveBeenCalled();
+    const depth = victoryText.setDepth.mock.calls[0][0];
+    expect(depth).toBeGreaterThanOrEqual(1000);
+    expect(victoryRestart.setDepth).toHaveBeenCalled();
+    const restartDepth = victoryRestart.setDepth.mock.calls[0][0];
+    expect(restartDepth).toBeGreaterThanOrEqual(1000);
+  });
 });
