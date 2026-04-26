@@ -58,7 +58,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.maze = new Maze(this);
+    this.maze = new Maze(this, Math.floor(Math.random() * Maze.LAYOUT_COUNT));
     this.setupPacman();
     this.spawnGhosts();
     this.sentenceManager.initialize(this.levelData);
@@ -257,6 +257,10 @@ export class GameScene extends Phaser.Scene {
     this.ghosts.forEach(ghost => ghost && ghost.destroy());
     this.ghosts = [];
 
+    if (this.maze) {
+      this.maze.destroy();
+    }
+
     if (this.gameOverText) this.gameOverText.setVisible(false);
     if (this.victoryText) this.victoryText.setVisible(false);
     if (this.gameOverRestartText) this.gameOverRestartText.setVisible(false);
@@ -277,6 +281,7 @@ export class GameScene extends Phaser.Scene {
 
     this.gameStateManager.reset();
 
+    this.maze = new Maze(this, Math.floor(Math.random() * Maze.LAYOUT_COUNT));
     this.setupPacman();
     this.spawnGhosts();
     this.sentenceManager.initialize(this.levelData);
