@@ -18,6 +18,11 @@ coverage/
 # Claude Code (per-developer local settings)
 .claude/
 
+# SSH / private keys — never commit
+*.key
+*.pub
+*.pem
+
 # OS
 .DS_Store
 Thumbs.db
