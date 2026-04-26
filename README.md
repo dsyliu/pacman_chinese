@@ -6,6 +6,8 @@ An educational browser-based game that helps young students learn Chinese charac
 
 This game combines entertainment with education to make learning Chinese characters fun and engaging. The game displays a sentence with missing characters (shown as empty squares □), and players control Pacman through a 28×31 tile maze to collect only the correct Chinese character "ghosts" that complete the sentence. Collecting wrong characters results in game over, while collecting all correct characters leads to victory.
 
+Each game randomly selects one of three hand-designed mazes and one sentence from `data/sentences.json`, so no two playthroughs are identical. The canvas auto-scales to fit any browser viewport.
+
 
 ## Technology Stack
 
@@ -70,19 +72,21 @@ npm run preview
 
 ## Game Controls
 
+- **Click** or **Any Key** - Dismiss the start splash and begin play (also unlocks browser audio)
 - **Arrow Keys** or **WASD** - Move Pacman
 - **Spacebar** - Restart game (after game over or victory)
 
 ## Gameplay
 
-1. A sentence with missing characters is displayed at the bottom of the screen
-2. Missing characters are shown as empty squares (□)
-3. Chinese character "ghosts" wander through the maze corridors, picking random valid directions at each intersection
-4. Control Pacman through the maze to collect only the **correct** characters that complete the sentence
-5. Pacman is grid-aligned: queue a turn before reaching an intersection and it will turn when the path opens
-6. Avoid **wrong** characters - touching them ends the game immediately
-7. Win by collecting all correct characters to complete the sentence
-8. Press **Spacebar** to restart and play a new random level
+1. The first time the game loads, a "Click or Press Any Key to Start" splash appears — this also unlocks browser audio so the music plays from the very first move.
+2. A sentence with missing characters is displayed at the bottom of the screen.
+3. Missing characters are shown as empty squares (□).
+4. Chinese character "ghosts" wander through the maze corridors, picking random valid directions at each intersection.
+5. Control Pacman through the maze to collect only the **correct** characters that complete the sentence.
+6. Pacman is grid-aligned: queue a turn before reaching an intersection and it will turn when the path opens.
+7. Avoid **wrong** characters - touching them ends the game immediately.
+8. Win by collecting all correct characters to complete the sentence.
+9. Press **Spacebar** to restart and play a new random level (with a fresh random maze).
 
 ## Customizing Sentences
 
@@ -114,26 +118,34 @@ Edit `data/sentences.json` to add or modify sentences:
 ```
 pacman_chinese/
 ├── data/
-│   └── sentences.json          # Sentence data with correct/wrong characters
+│   └── sentences.json                # Sentence data with correct/wrong characters
+├── deploy/
+│   └── oci-cloud-init.yaml           # One-shot cloud-init for Oracle Cloud
 ├── src/
 │   ├── entities/
-│   │   ├── Maze.ts             # Maze layout, wall rendering, tile helpers
-│   │   ├── Pacman.ts           # Player character controller
-│   │   └── CharacterGhost.ts  # Chinese character ghost entities
+│   │   ├── Maze.ts                   # Three layouts, wall rendering, tile helpers
+│   │   ├── Pacman.ts                 # Player character controller
+│   │   ├── CharacterGhost.ts         # Chinese character ghost entities
+│   │   └── __tests__/                # Vitest specs (Maze invariants, movement, etc.)
 │   ├── managers/
-│   │   ├── AudioManager.ts    # Arcade-style music and sound effects
-│   │   ├── DataLoader.ts      # Loads sentence data from JSON
-│   │   ├── GameState.ts       # Game state management
-│   │   └── SentenceManager.ts # Manages sentence display
+│   │   ├── AudioManager.ts           # Web Audio music + autoplay handling
+│   │   ├── DataLoader.ts             # Loads sentence data from JSON
+│   │   ├── GameState.ts              # Game state machine
+│   │   ├── SentenceManager.ts        # Manages sentence display
+│   │   └── __tests__/
 │   ├── scenes/
-│   │   └── GameScene.ts       # Main game scene
+│   │   ├── GameScene.ts              # Main game scene + start splash
+│   │   └── __tests__/
+│   ├── test-utils/
+│   │   └── phaserMock.ts             # Module-level Phaser stand-in for tests
 │   ├── utils/
-│   │   └── types.ts           # TypeScript type definitions
-│   └── main.ts                # Game entry point
-├── index.html                 # HTML entry point
-├── package.json               # Dependencies and scripts
-├── tsconfig.json              # TypeScript configuration
-└── vite.config.ts             # Vite build configuration
+│   │   └── types.ts                  # TypeScript type definitions
+│   └── main.ts                       # Game entry point + Phaser scale config
+├── index.html                        # HTML entry point
+├── package.json                      # Dependencies and scripts
+├── tsconfig.json                     # TypeScript configuration
+├── vite.config.ts                    # Vite build configuration
+└── vitest.config.ts                  # Vitest + coverage configuration
 ```
 
 ## Development
@@ -144,9 +156,28 @@ pacman_chinese/
 npm run build
 ```
 
+### Tests
+
+```bash
+npm test             # run the full Vitest suite once
+npm run test:watch   # watch mode while developing
+npm run coverage     # v8 coverage report
+```
+
+Tests live in `__tests__/` subfolders next to the file they cover. Phaser is mocked at module level (`src/test-utils/phaserMock.ts`) so the suite runs in milliseconds without pulling the full framework.
+
 ### Type Checking
 
 TypeScript will check types during the build process. For development, your IDE should provide real-time type checking.
+
+## Deployment to Oracle Cloud
+
+`deploy/oci-cloud-init.yaml` is a turn-key cloud-init script that brings up a fresh Oracle Linux 8/9 instance, installs nginx + Node 20, clones this repo, builds the production bundle, and serves it on port 80. To use it:
+
+1. In the OCI console, launch a Compute instance (Always-Free shape works fine).
+2. Under **Show advanced options → Management**, paste the file contents into the **Cloud-init script** field (or upload it).
+3. Add an Ingress rule on the instance's VCN Security List allowing TCP 80 from `0.0.0.0/0`.
+4. Make sure the instance has a public IP. After 3–5 minutes, browse to `http://<public-ip>/`.
 
 ## Browser Compatibility
 

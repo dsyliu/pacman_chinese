@@ -1,0 +1,113 @@
+#cloud-config
+# ----------------------------------------------------------------------------
+# Cloud-init for Oracle Cloud Infrastructure (Oracle Linux 8 / 9, x86 or ARM)
+#
+# Builds and serves the Pac-Man Chinese game via nginx on port 80.
+#
+# How to use:
+#   1. Create a Compute instance in OCI (Always-Free shape is fine).
+#   2. Paste the contents of this file into the "User data" field under
+#      "Show advanced options" -> "Management" -> "Cloud-init script"
+#      (or upload it directly).
+#   3. After the instance boots (~3-5 min the first time), browse to its
+#      public IP. The site is served on port 80.
+#
+# OCI prerequisites (these CAN'T be done from cloud-init — set them in the
+# OCI console BEFORE the public IP works):
+#   - The instance's VCN security list (or NSG) must have an Ingress rule
+#     allowing TCP 80 (and 443 if you add TLS later) from 0.0.0.0/0.
+#   - The instance must have a public IP assigned.
+# ----------------------------------------------------------------------------
+
+packages:
+  - git
+  - nginx
+  - firewalld
+  - policycoreutils-python-utils
+
+write_files:
+  - path: /etc/nginx/nginx.conf
+    permissions: '0644'
+    content: |
+      user nginx;
+      worker_processes auto;
+      error_log /var/log/nginx/error.log;
+      pid /run/nginx.pid;
+
+      events {
+        worker_connections 1024;
+      }
+
+      http {
+        log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for"';
+        access_log  /var/log/nginx/access.log  main;
+
+        sendfile            on;
+        tcp_nopush          on;
+        tcp_nodelay         on;
+        keepalive_timeout   65;
+        types_hash_max_size 4096;
+        include             /etc/nginx/mime.types;
+        default_type        application/octet-stream;
+        gzip                on;
+        gzip_types          text/plain text/css application/javascript application/json image/svg+xml;
+
+        server {
+          listen 80 default_server;
+          listen [::]:80 default_server;
+          server_name _;
+          root /var/www/pacman;
+          index index.html;
+
+          location / {
+            try_files $uri $uri/ /index.html;
+          }
+
+          # Hashed Vite bundles — cache forever
+          location /assets/ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+          }
+
+          # Level data — short cache so edits show up quickly
+          location /data/ {
+            expires 5m;
+          }
+        }
+      }
+
+runcmd:
+  # ---- Node.js 20 (Vite 5 needs Node >=18) ------------------------------
+  - bash -c "curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -"
+  - dnf install -y nodejs
+
+  # ---- Clone + build ----------------------------------------------------
+  - git clone https://github.com/dsyliu/pacman_chinese.git /opt/pacman_chinese
+  - bash -c "cd /opt/pacman_chinese && npm ci && npm run build"
+
+  # ---- Deploy to nginx webroot ------------------------------------------
+  - mkdir -p /var/www/pacman
+  - cp -r /opt/pacman_chinese/dist/. /var/www/pacman/
+  - chown -R nginx:nginx /var/www/pacman
+  - chmod -R o+rX /var/www/pacman
+  - chcon -R -t httpd_sys_content_t /var/www/pacman
+
+  # ---- firewalld --------------------------------------------------------
+  - systemctl enable --now firewalld
+  - firewall-cmd --permanent --add-service=http
+  - firewall-cmd --permanent --add-service=https
+  - firewall-cmd --reload
+
+  # ---- Override OCI's pre-baked iptables block on port 80/443 -----------
+  - iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80  -j ACCEPT
+  - iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+  - bash -c "/usr/sbin/iptables-save > /etc/sysconfig/iptables 2>/dev/null || true"
+
+  # ---- Start nginx ------------------------------------------------------
+  - nginx -t
+  - systemctl enable --now nginx
+  - systemctl reload nginx
+
+final_message: "Pac-Man Chinese deployed. Browse to http://<public-ip>/"

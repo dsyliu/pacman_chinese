@@ -15,6 +15,9 @@ coverage/
 *.swo
 *~
 
+# Claude Code (per-developer local settings)
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -22,7 +25,3 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
-
-# Claude
-CLAUDE.md
-.claude/
