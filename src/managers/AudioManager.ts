@@ -5,6 +5,7 @@ export class AudioManager {
   private audioContext: AudioContext | null = null;
   private backgroundMusicInterval: number | null = null;
   private nextPatternTime: number = 0;
+  private bgMasterGain: GainNode | null = null;
 
   constructor(_scene: Phaser.Scene) {
     this.initializeAudio();
@@ -18,6 +19,40 @@ export class AudioManager {
       console.warn('Web Audio API not supported');
       return;
     }
+    this.installAutoResume();
+  }
+
+  private installAutoResume(): void {
+    if (typeof window === 'undefined' || !this.audioContext) return;
+    const events: Array<keyof WindowEventMap> = ['pointerdown', 'mousedown', 'keydown', 'touchstart', 'click'];
+    const handler = () => {
+      this.resume();
+      events.forEach(e => {
+        window.removeEventListener(e, handler, true);
+        if (typeof document !== 'undefined') {
+          document.removeEventListener(e, handler, true);
+        }
+      });
+    };
+    events.forEach(e => {
+      // capture phase so we still see the event even if Phaser/the canvas
+      // calls stopPropagation in a later listener
+      window.addEventListener(e, handler, true);
+      if (typeof document !== 'undefined') {
+        document.addEventListener(e, handler, true);
+      }
+    });
+  }
+
+  resume(): void {
+    if (!this.audioContext) return;
+    try {
+      if (this.audioContext.state === 'suspended' && typeof this.audioContext.resume === 'function') {
+        this.audioContext.resume();
+      }
+    } catch {
+      // ignore
+    }
   }
 
   private playNote(
@@ -25,13 +60,14 @@ export class AudioManager {
     startTime: number,
     duration: number,
     gain: number = 0.08,
-    type: OscillatorType = 'square'
+    type: OscillatorType = 'square',
+    destination?: AudioNode
   ): void {
     if (!this.audioContext) return;
     const osc = this.audioContext.createOscillator();
     const g = this.audioContext.createGain();
     osc.connect(g);
-    g.connect(this.audioContext.destination);
+    g.connect(destination ?? this.audioContext.destination);
     osc.type = type;
     osc.frequency.value = frequency;
     g.gain.setValueAtTime(0, startTime);
@@ -44,26 +80,29 @@ export class AudioManager {
   private createBackgroundMusic(): void {
     if (!this.audioContext) return;
 
-    // Classic Pac-Man-style intro melody (4 phrases ascending by half-step)
-    const REST = 0;
+    // Master gain for instant cutoff on stopBackgroundMusic
+    this.bgMasterGain = this.audioContext.createGain();
+    this.bgMasterGain.gain.setValueAtTime(1, this.audioContext.currentTime);
+    this.bgMasterGain.connect(this.audioContext.destination);
+
+    // 16-note upbeat I-vi-IV-V arpeggio loop (~1.6 s)
     const melody = [
-      // Phrase 1
-      523.25, 1046.50, 783.99, 659.25, 1046.50, 783.99, 659.25, REST,
-      // Phrase 2 (up a half-step)
-      554.37, 1108.73, 830.61, 698.46, 1108.73, 830.61, 698.46, REST,
-      // Phrase 3 (up another half-step)
-      587.33, 1174.66, 880.00, 698.46, 1174.66, 880.00, 698.46, REST,
-      // Phrase 4 (chromatic walk-up resolution)
-      622.25, 659.25, 698.46, 698.46, 739.99, 783.99, 830.61, 880.00
+      // I  (C):  C  E  G  C5
+      261.63, 329.63, 392.00, 523.25,
+      // vi (Am): A  C5 E5 A5
+      440.00, 523.25, 659.25, 880.00,
+      // IV (F):  F  A  C5 F5
+      349.23, 440.00, 523.25, 698.46,
+      // V  (G):  G  B  D5 G5
+      392.00, 493.88, 587.33, 783.99
     ];
 
-    const noteDuration = 0.11;
+    const noteDuration = 0.10;
     const patternDuration = melody.length * noteDuration;
 
     const schedulePattern = (startTime: number) => {
       melody.forEach((freq, i) => {
-        if (freq === REST) return;
-        this.playNote(freq, startTime + i * noteDuration, noteDuration * 0.85);
+        this.playNote(freq, startTime + i * noteDuration, noteDuration * 0.85, 0.08, 'square', this.bgMasterGain!);
       });
     };
 
@@ -152,6 +191,17 @@ export class AudioManager {
     if (this.backgroundMusicInterval) {
       clearInterval(this.backgroundMusicInterval);
       this.backgroundMusicInterval = null;
+    }
+    if (this.audioContext && this.bgMasterGain) {
+      const now = this.audioContext.currentTime;
+      try {
+        this.bgMasterGain.gain.cancelScheduledValues(now);
+        this.bgMasterGain.gain.setValueAtTime(this.bgMasterGain.gain.value ?? 0, now);
+        this.bgMasterGain.gain.linearRampToValueAtTime(0, now + 0.05);
+      } catch {
+        // ignore
+      }
+      this.bgMasterGain = null;
     }
   }
 

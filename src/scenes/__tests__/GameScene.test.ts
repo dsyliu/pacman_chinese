@@ -30,17 +30,20 @@ function attachSceneStubs(scene: GameScene) {
   return stub;
 }
 
-async function buildGame() {
+async function buildGame(opts: { autoStart?: boolean } = {}) {
   vi.spyOn(DataLoader, 'loadData').mockResolvedValue({ levels: [sampleLevel] });
   vi.stubGlobal('AudioContext', vi.fn(() => ({
     currentTime: 0,
     destination: {},
     createOscillator: () => ({ type: '', frequency: { value: 0 }, connect: () => {}, start: () => {}, stop: () => {} }),
-    createGain: () => ({ gain: { setValueAtTime: () => {}, linearRampToValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} }, connect: () => {} })
+    createGain: () => ({ gain: { value: 1, setValueAtTime: () => {}, linearRampToValueAtTime: () => {}, exponentialRampToValueAtTime: () => {}, cancelScheduledValues: () => {} }, connect: () => {} })
   })));
   const scene = new GameScene();
   const stub = attachSceneStubs(scene);
   await scene.create();
+  if (opts.autoStart !== false) {
+    (scene as any).beginGame();
+  }
   return { scene, stub };
 }
 
@@ -55,12 +58,44 @@ describe('GameScene', () => {
     expect(scene).toBeInstanceOf(GameScene);
   });
 
-  it('create() loads data, builds the maze, and starts in PLAYING', async () => {
+  it('create() loads data and builds the maze; beginGame() transitions to PLAYING', async () => {
     const { scene } = await buildGame();
     expect((scene as any).maze).toBeDefined();
     expect((scene as any).pacman).toBeDefined();
     expect((scene as any).gameStateManager.getState()).toBe(GameState.PLAYING);
     expect((scene as any).levelData).toEqual(sampleLevel);
+  });
+
+  it('create() holds the game in MENU and shows a start splash until first interaction', async () => {
+    const { scene, stub } = await buildGame({ autoStart: false });
+    expect((scene as any).gameStateManager.getState()).toBe(GameState.MENU);
+    expect((scene as any).startSplashText).not.toBeNull();
+    const splash = (scene as any).startSplashText;
+    expect(splash.text).toMatch(/Start/i);
+    expect(splash.setDepth).toHaveBeenCalled();
+    const depth = splash.setDepth.mock.calls[0][0];
+    expect(depth).toBeGreaterThanOrEqual(1000);
+    // Splash registered once-handlers for first interaction
+    expect((stub.input.once as any).mock.calls.length).toBeGreaterThan(0);
+    expect((stub.input.keyboard.once as any).mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it('beginGame() destroys the splash, starts music, and transitions to PLAYING', async () => {
+    const { scene } = await buildGame({ autoStart: false });
+    const splash = (scene as any).startSplashText;
+    expect(splash.destroy).toBeDefined();
+    (scene as any).beginGame();
+    expect((scene as any).startSplashText).toBeNull();
+    expect((scene as any).gameStateManager.getState()).toBe(GameState.PLAYING);
+    expect(splash.destroy).toHaveBeenCalled();
+  });
+
+  it('beginGame() is a no-op when not in MENU state', async () => {
+    const { scene } = await buildGame();
+    // Already in PLAYING via auto-start
+    const stateBefore = (scene as any).gameStateManager.getState();
+    (scene as any).beginGame();
+    expect((scene as any).gameStateManager.getState()).toBe(stateBefore);
   });
 
   it('create() spawns one ghost per correct char plus wrong ghosts (capped)', async () => {

@@ -26,6 +26,8 @@ export class GameScene extends Phaser.Scene {
   private victoryText: Phaser.GameObjects.Text | null = null;
   private gameOverRestartText: Phaser.GameObjects.Text | null = null;
   private victoryRestartText: Phaser.GameObjects.Text | null = null;
+  private startSplashText: Phaser.GameObjects.Text | null = null;
+  private spaceRestartBound: boolean = false;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -63,12 +65,45 @@ export class GameScene extends Phaser.Scene {
     this.spawnGhosts();
     this.sentenceManager.initialize(this.levelData);
     this.gameStateManager.initializeLevel(this.levelData.correctChars.length);
+    // Hold the game in MENU until the user dismisses the start splash;
+    // this also satisfies the browser autoplay policy on the same gesture.
+    this.gameStateManager.setState(GameState.MENU);
 
-    this.audioManager.playBackgroundMusic();
+    this.showStartSplash();
+  }
 
-    this.input.keyboard!.on('keydown-SPACE', () => {
-      this.restart();
+  private showStartSplash(): void {
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+    this.startSplashText = this.add.text(w / 2, h / 2, 'Click or Press Any Key to Start', {
+      fontSize: '40px',
+      color: '#FFFF00',
+      fontFamily: 'Arial, sans-serif'
     });
+    this.startSplashText.setOrigin(0.5, 0.5);
+    this.startSplashText.setDepth(2000);
+
+    const begin = () => this.beginGame();
+    this.input.once('pointerdown', begin);
+    this.input.keyboard!.once('keydown', begin);
+  }
+
+  beginGame(): void {
+    if (this.gameStateManager.getState() !== GameState.MENU) return;
+    if (this.startSplashText) {
+      this.startSplashText.destroy();
+      this.startSplashText = null;
+    }
+    this.audioManager.resume();
+    this.audioManager.playBackgroundMusic();
+    this.gameStateManager.setState(GameState.PLAYING);
+
+    if (!this.spaceRestartBound) {
+      this.input.keyboard!.on('keydown-SPACE', () => {
+        this.restart();
+      });
+      this.spaceRestartBound = true;
+    }
   }
 
   private setupPacman(): void {

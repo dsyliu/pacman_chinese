@@ -123,9 +123,13 @@ export function createSceneStub() {
         addKeys: vi.fn((_keys: string) => wasdKeys),
         on: vi.fn((evt: string, fn: (...args: any[]) => void) => {
           (keyboardListeners[evt] ||= []).push(fn);
+        }),
+        once: vi.fn((evt: string, fn: (...args: any[]) => void) => {
+          (keyboardListeners[evt] ||= []).push(fn);
         })
       },
-      on: vi.fn()
+      on: vi.fn(),
+      once: vi.fn()
     },
     _wasdKeys: wasdKeys,
     _cursorKeys: cursorKeys,

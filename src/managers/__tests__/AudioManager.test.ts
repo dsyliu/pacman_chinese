@@ -22,9 +22,11 @@ function makeMockAudioContext() {
     createGain: vi.fn(() => {
       const g: any = {
         gain: {
+          value: 1,
           setValueAtTime: vi.fn(),
           linearRampToValueAtTime: vi.fn(),
-          exponentialRampToValueAtTime: vi.fn()
+          exponentialRampToValueAtTime: vi.fn(),
+          cancelScheduledValues: vi.fn()
         },
         connect: vi.fn((dest: any) => connections.push(['gain->', dest]))
       };
@@ -127,5 +129,43 @@ describe('AudioManager', () => {
     am.playVictoryMusic();
     am.playGameOverMusic();
     expect(ctx.createOscillator.mock.calls.length).toBe(before);
+  });
+
+  it('resume() calls AudioContext.resume() when context is suspended', () => {
+    const resumeFn = vi.fn();
+    const suspendedCtx: any = {
+      ...makeMockAudioContext(),
+      state: 'suspended',
+      resume: resumeFn
+    };
+    vi.stubGlobal('AudioContext', vi.fn(() => suspendedCtx));
+    const am = new AudioManager({} as any);
+    am.resume();
+    expect(resumeFn).toHaveBeenCalled();
+  });
+
+  it('resume() is a no-op when context is already running', () => {
+    const resumeFn = vi.fn();
+    const runningCtx: any = {
+      ...makeMockAudioContext(),
+      state: 'running',
+      resume: resumeFn
+    };
+    vi.stubGlobal('AudioContext', vi.fn(() => runningCtx));
+    const am = new AudioManager({} as any);
+    am.resume();
+    expect(resumeFn).not.toHaveBeenCalled();
+  });
+
+  it('stopBackgroundMusic ramps the master gain to zero so queued notes go silent', () => {
+    const am = new AudioManager({} as any);
+    am.playBackgroundMusic();
+    // The first createGain call is the bg master gain (created before any notes)
+    const masterGain = ctx.createGain.mock.results[0].value;
+    am.stopBackgroundMusic();
+    expect(masterGain.gain.cancelScheduledValues).toHaveBeenCalled();
+    const rampCalls = masterGain.gain.linearRampToValueAtTime.mock.calls;
+    const rampedToZero = rampCalls.some((c: any[]) => c[0] === 0);
+    expect(rampedToZero).toBe(true);
   });
 });
