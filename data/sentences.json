@@ -18,7 +18,7 @@
       "id": 3,
       "sentence": "一星期有  ",
       "correctChars": ["七", "天"],
-      "wrongChars": ["三", "十", "日", "百", "千"],
+      "wrongChars": ["三", "十", "友", "百", "千"],
       "translation": "There are seven days in a week"
     },
     {
