@@ -370,6 +370,120 @@ describe('GameScene', () => {
       expect(restartText.text).toMatch(/SPACE/);
     });
 
+    it('a tap anywhere during GAME_OVER restarts the game', async () => {
+      const { scene, stub } = await buildGame();
+      const pacman = (scene as any).pacman;
+      const ghosts = (scene as any).ghosts as any[];
+      const wrongGhost = ghosts.find(g => !g.getIsCorrect());
+      wrongGhost.x = pacman.x;
+      wrongGhost.y = pacman.y;
+      scene.update(0, 16);
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.GAME_OVER);
+      const mazeBefore = (scene as any).maze;
+
+      stub._emitInput('pointerdown', { x: 50, y: 50 });
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.PLAYING);
+      expect((scene as any).maze).not.toBe(mazeBefore);
+    });
+
+    it('a tap anywhere during VICTORY restarts the game', async () => {
+      const { scene, stub } = await buildGame();
+      const pacman = (scene as any).pacman;
+      const ghosts = (scene as any).ghosts as any[];
+      for (const g of ghosts.filter(g => g.getIsCorrect())) {
+        g.x = pacman.x;
+        g.y = pacman.y;
+        scene.update(0, 16);
+      }
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.VICTORY);
+      const mazeBefore = (scene as any).maze;
+
+      stub._emitInput('pointerdown', { x: 50, y: 50 });
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.PLAYING);
+      expect((scene as any).maze).not.toBe(mazeBefore);
+    });
+
+    function stubTouchMode() {
+      window.matchMedia = vi.fn((q: string) => ({
+        matches: q === '(pointer: coarse)',
+        media: q,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false
+      })) as any;
+    }
+
+    it('renders 4 directional D-pad buttons (↑↓←→) in touch mode', async () => {
+      stubTouchMode();
+      const { stub } = await buildGame();
+      const labels = (stub.add.text as any).mock.calls.map((c: any[]) => c[2]);
+      expect(labels).toContain('↑');
+      expect(labels).toContain('↓');
+      expect(labels).toContain('←');
+      expect(labels).toContain('→');
+    });
+
+    it('does not render D-pad buttons in keyboard mode', async () => {
+      const { stub } = await buildGame();
+      const labels = (stub.add.text as any).mock.calls.map((c: any[]) => c[2]);
+      // Keyboard mode shows arrows inside a multi-line string, never as a standalone label.
+      expect(labels).not.toContain('↑');
+      expect(labels).not.toContain('↓');
+      expect(labels).not.toContain('←');
+      expect(labels).not.toContain('→');
+    });
+
+    it('tapping each D-pad button queues the matching direction on Pacman', async () => {
+      stubTouchMode();
+      const { scene, stub } = await buildGame();
+      const pacman = (scene as any).pacman;
+      const spy = vi.spyOn(pacman, 'queueDirection');
+
+      const texts = (stub.add.text as any).mock.results.map((r: any) => r.value);
+      const upBtn = texts.find((t: any) => t.text === '↑');
+      const downBtn = texts.find((t: any) => t.text === '↓');
+      const leftBtn = texts.find((t: any) => t.text === '←');
+      const rightBtn = texts.find((t: any) => t.text === '→');
+
+      upBtn._emit('pointerdown');
+      expect(spy).toHaveBeenLastCalledWith(0, -1);
+      downBtn._emit('pointerdown');
+      expect(spy).toHaveBeenLastCalledWith(0, 1);
+      leftBtn._emit('pointerdown');
+      expect(spy).toHaveBeenLastCalledWith(-1, 0);
+      rightBtn._emit('pointerdown');
+      expect(spy).toHaveBeenLastCalledWith(1, 0);
+    });
+
+    it('D-pad buttons are setInteractive so taps register', async () => {
+      stubTouchMode();
+      const { stub } = await buildGame();
+      const texts = (stub.add.text as any).mock.results.map((r: any) => r.value);
+      for (const arrow of ['↑', '↓', '←', '→']) {
+        const btn = texts.find((t: any) => t.text === arrow);
+        expect(btn.setInteractive).toHaveBeenCalled();
+      }
+    });
+
+    it('a tap during PLAYING does NOT restart the game', async () => {
+      const { scene, stub } = await buildGame();
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.PLAYING);
+      const mazeBefore = (scene as any).maze;
+
+      stub._emitInput('pointerdown', { x: 50, y: 50 });
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.PLAYING);
+      expect((scene as any).maze).toBe(mazeBefore);
+    });
+
     it('restart hint says "Tap" in touch mode', async () => {
       window.matchMedia = vi.fn((q: string) => ({
         matches: q === '(pointer: coarse)',

@@ -122,11 +122,14 @@ export class ScoreboardManager {
     this.addStatic(centerX, 830, 'CONTROLS', 22, '#FFFFFF');
 
     if (inputMode === 'touch') {
+      // The CONTROLS section's body in touch mode is the on-screen D-pad, which
+      // GameScene draws under this header. We still render a brief restart hint
+      // here since the D-pad only covers movement.
       this.addStatic(
         centerX,
-        900,
-        'Swipe to move\n(up / down / left / right)\n\nTap RESTART\nto play again',
-        16,
+        985,
+        'Tap anywhere to Restart',
+        14,
         '#BBBBBB'
       );
     } else {

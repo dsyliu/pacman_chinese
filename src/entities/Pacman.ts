@@ -20,8 +20,6 @@ export class Pacman extends Phaser.GameObjects.Container {
     this.graphics = scene.add.graphics();
     this.add(this.graphics);
 
-    this.installSwipeInput(scene);
-
     if (scene.input.keyboard) {
       this.cursors = scene.input.keyboard.createCursorKeys();
     } else {
@@ -143,26 +141,8 @@ export class Pacman extends Phaser.GameObjects.Container {
     this.graphics.fillPath();
   }
 
-  private installSwipeInput(scene: Phaser.Scene): void {
-    const SWIPE_THRESHOLD = 30;
-    let touchStart: { x: number; y: number } | null = null;
-
-    scene.input.on('pointerdown', (pointer: { x: number; y: number }) => {
-      touchStart = { x: pointer.x, y: pointer.y };
-    });
-
-    scene.input.on('pointerup', (pointer: { x: number; y: number }) => {
-      if (!touchStart) return;
-      const dx = pointer.x - touchStart.x;
-      const dy = pointer.y - touchStart.y;
-      touchStart = null;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_THRESHOLD) return;
-      if (Math.abs(dx) >= Math.abs(dy)) {
-        this.queuedDirection.set(dx > 0 ? 1 : -1, 0);
-      } else {
-        this.queuedDirection.set(0, dy > 0 ? 1 : -1);
-      }
-    });
+  queueDirection(dx: number, dy: number): void {
+    this.queuedDirection.set(dx, dy);
   }
 
   getGridX(): number {

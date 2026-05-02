@@ -32,6 +32,7 @@ export class GameScene extends Phaser.Scene {
   private victoryRestartText: Phaser.GameObjects.Text | null = null;
   private startSplashText: Phaser.GameObjects.Text | null = null;
   private spaceRestartBound: boolean = false;
+  private tapRestartBound: boolean = false;
   private inputMode: InputMode = 'keyboard';
 
   constructor() {
@@ -77,6 +78,9 @@ export class GameScene extends Phaser.Scene {
     const panelX = BOARD_PIXEL_WIDTH;
     const panelWidth = this.cameras.main.width - BOARD_PIXEL_WIDTH;
     this.scoreboardManager.render(panelX, panelWidth, this.inputMode);
+    if (this.inputMode === 'touch') {
+      this.renderDPad(panelX, panelWidth);
+    }
 
     // Hold the game in MENU until the user dismisses the start splash;
     // this also satisfies the browser autoplay policy on the same gesture.
@@ -115,6 +119,16 @@ export class GameScene extends Phaser.Scene {
         this.restart();
       });
       this.spaceRestartBound = true;
+    }
+
+    if (!this.tapRestartBound) {
+      this.input.on('pointerdown', () => {
+        const s = this.gameStateManager.getState();
+        if (s === GameState.GAME_OVER || s === GameState.VICTORY) {
+          this.restart();
+        }
+      });
+      this.tapRestartBound = true;
     }
   }
 
@@ -306,6 +320,31 @@ export class GameScene extends Phaser.Scene {
       if (this.victoryRestartText) {
         this.victoryRestartText.setVisible(true);
       }
+    }
+  }
+
+  private renderDPad(panelX: number, panelWidth: number): void {
+    const cx = panelX + panelWidth / 2;
+    const buttons: Array<{ label: string; dx: number; dy: number; ox: number; oy: number }> = [
+      { label: '↑', dx: 0, dy: -1, ox: 0, oy: -55 },
+      { label: '↓', dx: 0, dy: 1, ox: 0, oy: 55 },
+      { label: '←', dx: -1, dy: 0, ox: -55, oy: 0 },
+      { label: '→', dx: 1, dy: 0, ox: 55, oy: 0 }
+    ];
+    const centerY = 905;
+    for (const b of buttons) {
+      const btn = this.add.text(cx + b.ox, centerY + b.oy, b.label, {
+        fontSize: '32px',
+        color: '#FFFFFF',
+        backgroundColor: '#3a3a4a',
+        padding: { x: 14, y: 8 },
+        fontFamily: 'Arial, sans-serif'
+      });
+      btn.setOrigin(0.5, 0.5);
+      btn.setInteractive({ useHandCursor: true });
+      btn.on('pointerdown', () => {
+        this.pacman.queueDirection(b.dx, b.dy);
+      });
     }
   }
 

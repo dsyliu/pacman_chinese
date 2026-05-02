@@ -101,7 +101,7 @@ describe('ScoreboardManager', () => {
     expect(labels.some((t: string) => /correct/i.test(t) && /blanks/i.test(t))).toBe(true);
   });
 
-  it('render in touch mode shows Swipe-to-move and a Tap RESTART hint instead of arrow keys', () => {
+  it('render in touch mode hides keyboard arrow text and shows a Tap-to-restart hint (D-pad is drawn by GameScene)', () => {
     const scene = createSceneStub();
     const mgr = new ScoreboardManager(scene);
     mgr.render(896, 256, 'touch');
@@ -110,11 +110,12 @@ describe('ScoreboardManager', () => {
     const labels = texts.map((t: any) => t.text);
     expect(labels).toContain('HOW TO PLAY');
     expect(labels).toContain('CONTROLS');
-    expect(labels.some((t: string) => /Swipe/i.test(t) && /move/i.test(t))).toBe(true);
-    expect(labels.some((t: string) => /Tap/i.test(t) && /restart/i.test(t))).toBe(true);
-    // Touch mode should NOT advertise keyboard-only affordances.
+    // Touch mode should NOT advertise swipe controls (replaced by the D-pad)
+    // or keyboard-only affordances.
+    expect(labels.every((t: string) => !/Swipe/i.test(t))).toBe(true);
     expect(labels.every((t: string) => !/SPACE/.test(t))).toBe(true);
     expect(labels.every((t: string) => !/Move Up/.test(t))).toBe(true);
+    expect(labels.some((t: string) => /Tap/i.test(t) && /restart/i.test(t))).toBe(true);
   });
 
   it('render defaults to keyboard mode when input mode is omitted', () => {
