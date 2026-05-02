@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { BOARD_PIXEL_WIDTH } from '../entities/Maze';
+import { BOARD_PIXEL_WIDTH, BOARD_PIXEL_HEIGHT } from '../entities/Maze';
 import { getBlankIndices } from '../utils/sentence';
 import type { LevelData, CollectedCharacter } from '../utils/types';
 
@@ -48,9 +48,10 @@ export class SentenceManager {
       this.translationText = null;
     }
 
-    const screenHeight = this.scene.cameras.main.height;
     const centerX = BOARD_PIXEL_WIDTH / 2;
-    const yPosition = screenHeight - 80;
+    // Anchor to the maze, not the canvas, so portrait (taller canvas)
+    // doesn't push the sentence to the bottom under the score panel.
+    const yPosition = BOARD_PIXEL_HEIGHT + 40;
 
     // Build the sentence with filled blanks
     let displayText = '';

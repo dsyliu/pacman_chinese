@@ -179,11 +179,26 @@ export class AudioManager {
 
   playBackgroundMusic(): void {
     if (this.isMuted || !this.audioContext) return;
-    
-    // Stop any existing background music
+
     this.stopBackgroundMusic();
-    
-    // Start new background music
+
+    // On Android (and any browser with a stricter autoplay policy) the
+    // AudioContext starts suspended. Scheduling notes against its
+    // not-yet-running currentTime makes them fire silently, so defer the
+    // scheduling until resume() actually resolves.
+    if (this.audioContext.state === 'suspended' && typeof this.audioContext.resume === 'function') {
+      this.audioContext.resume()
+        .then(() => {
+          if (!this.isMuted && this.audioContext) {
+            this.createBackgroundMusic();
+          }
+        })
+        .catch(() => {
+          // ignore — user gesture will retry on next interaction
+        });
+      return;
+    }
+
     this.createBackgroundMusic();
   }
 

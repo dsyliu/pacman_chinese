@@ -9,7 +9,7 @@ import { GameScene } from '../GameScene';
 import { DataLoader } from '../../managers/DataLoader';
 import { GameState } from '../../utils/types';
 import { createSceneStub } from '../../test-utils/phaserMock';
-import { TILE_SIZE, BOARD_PIXEL_WIDTH } from '../../entities/Maze';
+import { TILE_SIZE, BOARD_PIXEL_WIDTH, BOARD_PIXEL_HEIGHT } from '../../entities/Maze';
 
 const sampleLevel = {
   id: 1,
@@ -29,7 +29,7 @@ function attachSceneStubs(scene: GameScene) {
   return stub;
 }
 
-async function buildGame(opts: { autoStart?: boolean } = {}) {
+async function buildGame(opts: { autoStart?: boolean; portrait?: boolean } = {}) {
   vi.spyOn(DataLoader, 'loadData').mockResolvedValue({ levels: [sampleLevel] });
   vi.stubGlobal('AudioContext', vi.fn(() => ({
     currentTime: 0,
@@ -39,6 +39,10 @@ async function buildGame(opts: { autoStart?: boolean } = {}) {
   })));
   const scene = new GameScene();
   const stub = attachSceneStubs(scene);
+  if (opts.portrait) {
+    stub.cameras.main.width = 896;
+    stub.cameras.main.height = 2160;
+  }
   await scene.create();
   if (opts.autoStart !== false) {
     (scene as any).beginGame();
@@ -420,6 +424,21 @@ describe('GameScene', () => {
       })) as any;
     }
 
+    function stubPortraitMode(touch: boolean = false) {
+      window.matchMedia = vi.fn((q: string) => ({
+        matches:
+          q === '(orientation: portrait)' ||
+          (touch && q === '(pointer: coarse)'),
+        media: q,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false
+      })) as any;
+    }
+
     it('renders 4 directional D-pad buttons (↑↓←→) in touch mode', async () => {
       stubTouchMode();
       const { stub } = await buildGame();
@@ -470,6 +489,102 @@ describe('GameScene', () => {
         const btn = texts.find((t: any) => t.text === arrow);
         expect(btn.setInteractive).toHaveBeenCalled();
       }
+    });
+
+    it('in portrait orientation, the scoreboard panel is rendered below the maze (not to the right)', async () => {
+      stubPortraitMode();
+      const { stub } = await buildGame({ portrait: true });
+      const calls = (stub.add.text as any).mock.calls;
+      const scoreCall = calls.find((c: any[]) => c[2] === 'SCORE');
+      expect(scoreCall).toBeDefined();
+      expect(scoreCall![0]).toBeLessThanOrEqual(BOARD_PIXEL_WIDTH); // panel x within maze width, not to its right
+      expect(scoreCall![1]).toBeGreaterThan(BOARD_PIXEL_HEIGHT); // y is below the maze
+    });
+
+    it('in portrait orientation, the panel uses horizontal layout (SCORE on left, CONTROLS on right)', async () => {
+      stubPortraitMode();
+      const { stub } = await buildGame({ portrait: true });
+      const calls = (stub.add.text as any).mock.calls;
+      const score = calls.find((c: any[]) => c[2] === 'SCORE');
+      const controls = calls.find((c: any[]) => c[2] === 'CONTROLS');
+      expect(score).toBeDefined();
+      expect(controls).toBeDefined();
+      expect(score![0]).toBeLessThan(controls![0]);
+    });
+
+    it('in portrait orientation, Played/Won/Lost labels share the row with SCORE and CONTROLS', async () => {
+      stubPortraitMode();
+      const { stub } = await buildGame({ portrait: true });
+      const calls = (stub.add.text as any).mock.calls;
+      const score = calls.find((c: any[]) => c[2] === 'SCORE');
+      const played = calls.find((c: any[]) => c[2] === 'Played');
+      const won = calls.find((c: any[]) => c[2] === 'Won');
+      const lost = calls.find((c: any[]) => c[2] === 'Lost');
+      const controls = calls.find((c: any[]) => c[2] === 'CONTROLS');
+      expect(played).toBeDefined();
+      expect(won).toBeDefined();
+      expect(lost).toBeDefined();
+      expect(played![1]).toBe(score![1]);
+      expect(won![1]).toBe(score![1]);
+      expect(lost![1]).toBe(score![1]);
+      expect(controls![1]).toBe(score![1]);
+    });
+
+    it('in landscape orientation, the panel keeps its vertical layout (SCORE/STATS/CONTROLS share an x)', async () => {
+      const { stub } = await buildGame();
+      const calls = (stub.add.text as any).mock.calls;
+      const score = calls.find((c: any[]) => c[2] === 'SCORE');
+      const stats = calls.find((c: any[]) => c[2] === 'STATS');
+      const controls = calls.find((c: any[]) => c[2] === 'CONTROLS');
+      expect(score![0]).toBe(stats![0]);
+      expect(stats![0]).toBe(controls![0]);
+    });
+
+    it('in portrait + touch, the D-pad is rendered below the maze', async () => {
+      stubPortraitMode(true);
+      const { stub } = await buildGame({ portrait: true });
+      const calls = (stub.add.text as any).mock.calls;
+      const upBtn = calls.find((c: any[]) => c[2] === '↑');
+      expect(upBtn).toBeDefined();
+      expect(upBtn![1]).toBeGreaterThan(BOARD_PIXEL_HEIGHT);
+    });
+
+    it('in portrait + touch, the D-pad sits in the right column (aligned with the CONTROLS header)', async () => {
+      stubPortraitMode(true);
+      const { stub } = await buildGame({ portrait: true });
+      const calls = (stub.add.text as any).mock.calls;
+      const controls = calls.find((c: any[]) => c[2] === 'CONTROLS');
+      const upBtn = calls.find((c: any[]) => c[2] === '↑');
+      expect(controls).toBeDefined();
+      expect(upBtn).toBeDefined();
+      // D-pad center should be at roughly the CONTROLS column x.
+      expect(Math.abs(upBtn![0] - controls![0])).toBeLessThan(40);
+    });
+
+    it('start splash is anchored to the maze center even when the canvas is much taller (portrait)', async () => {
+      stubPortraitMode();
+      const { stub } = await buildGame({ autoStart: false, portrait: true });
+      const splashCall = (stub.add.text as any).mock.calls.find(
+        (c: any[]) => typeof c[2] === 'string' && /Press Any Key to Start/i.test(c[2])
+      );
+      expect(splashCall).toBeDefined();
+      expect(splashCall![1]).toBeLessThan(BOARD_PIXEL_HEIGHT); // on the maze, not the score panel
+    });
+
+    it('game-over text is anchored to the maze center even in portrait', async () => {
+      stubPortraitMode();
+      const { scene, stub } = await buildGame({ portrait: true });
+      const pacman = (scene as any).pacman;
+      const ghosts = (scene as any).ghosts as any[];
+      const wrongGhost = ghosts.find(g => !g.getIsCorrect());
+      wrongGhost.x = pacman.x;
+      wrongGhost.y = pacman.y;
+      scene.update(0, 16);
+      const goCall = (stub.add.text as any).mock.calls.find(
+        (c: any[]) => c[2] === 'Game Over!'
+      );
+      expect(goCall).toBeDefined();
+      expect(goCall![1]).toBeLessThan(BOARD_PIXEL_HEIGHT);
     });
 
     it('a tap during PLAYING does NOT restart the game', async () => {

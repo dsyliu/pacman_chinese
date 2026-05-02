@@ -1,13 +1,14 @@
 import Phaser from 'phaser';
 import { Pacman } from '../entities/Pacman';
 import { CharacterGhost } from '../entities/CharacterGhost';
-import { Maze, TILE_SIZE, BOARD_PIXEL_WIDTH } from '../entities/Maze';
+import { Maze, TILE_SIZE, BOARD_PIXEL_WIDTH, BOARD_PIXEL_HEIGHT } from '../entities/Maze';
 import { SentenceManager } from '../managers/SentenceManager';
 import { GameStateManager } from '../managers/GameState';
 import { DataLoader } from '../managers/DataLoader';
 import { AudioManager } from '../managers/AudioManager';
 import { ScoreboardManager } from '../managers/ScoreboardManager';
-import { detectInputMode } from '../utils/input';
+import { detectInputMode, detectOrientation } from '../utils/input';
+import { getPanelRect } from '../utils/layout';
 import type { InputMode } from '../utils/input';
 import { GameState } from '../utils/types';
 import type { LevelData } from '../utils/types';
@@ -75,11 +76,21 @@ export class GameScene extends Phaser.Scene {
     this.gameStateManager.initializeLevel(this.levelData.correctChars.length);
 
     this.inputMode = detectInputMode();
-    const panelX = BOARD_PIXEL_WIDTH;
-    const panelWidth = this.cameras.main.width - BOARD_PIXEL_WIDTH;
-    this.scoreboardManager.render(panelX, panelWidth, this.inputMode);
+    const orientation = detectOrientation();
+    const panel = getPanelRect(orientation);
+    const layoutMode = orientation === 'portrait' ? 'horizontal' : 'vertical';
+    this.scoreboardManager.render(panel.x, panel.width, this.inputMode, panel.y, layoutMode);
     if (this.inputMode === 'touch') {
-      this.renderDPad(panelX, panelWidth);
+      // In horizontal (portrait) panel, the D-pad sits in the right column,
+      // aligned with the CONTROLS header. In vertical (landscape) panel,
+      // the D-pad is centered.
+      const cx = layoutMode === 'horizontal'
+        ? panel.x + panel.width * 0.88
+        : panel.x + panel.width / 2;
+      // Horizontal: D-pad sits in the right column at the body row,
+      // aligned with the CONTROLS body in keyboard mode.
+      const cy = layoutMode === 'horizontal' ? panel.y + 85 : panel.y + 905;
+      this.renderDPad(cx, cy);
     }
 
     // Hold the game in MENU until the user dismisses the start splash;
@@ -90,8 +101,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private showStartSplash(): void {
-    const h = this.cameras.main.height;
-    this.startSplashText = this.add.text(BOARD_PIXEL_WIDTH / 2, h / 2, 'Tap or Press Any Key to Start', {
+    this.startSplashText = this.add.text(BOARD_PIXEL_WIDTH / 2, BOARD_PIXEL_HEIGHT / 2, 'Tap or Press Any Key to Start', {
       fontSize: '40px',
       color: '#FFFF00',
       fontFamily: 'Arial, sans-serif'
@@ -243,11 +253,11 @@ export class GameScene extends Phaser.Scene {
 
     if (!this.gameOverText) {
       const centerX = BOARD_PIXEL_WIDTH / 2;
-      const screenHeight = this.cameras.main.height;
+      const centerY = BOARD_PIXEL_HEIGHT / 2;
 
       this.gameOverText = this.add.text(
         centerX,
-        screenHeight / 2 - 50,
+        centerY - 50,
         'Game Over!',
         {
           fontSize: '64px',
@@ -260,7 +270,7 @@ export class GameScene extends Phaser.Scene {
 
       this.gameOverRestartText = this.add.text(
         centerX,
-        screenHeight / 2 + 50,
+        centerY + 50,
         this.restartHintText(),
         {
           fontSize: '32px',
@@ -287,11 +297,11 @@ export class GameScene extends Phaser.Scene {
 
     if (!this.victoryText) {
       const centerX = BOARD_PIXEL_WIDTH / 2;
-      const screenHeight = this.cameras.main.height;
+      const centerY = BOARD_PIXEL_HEIGHT / 2;
 
       this.victoryText = this.add.text(
         centerX,
-        screenHeight / 2 - 50,
+        centerY - 50,
         'Victory!',
         {
           fontSize: '64px',
@@ -304,7 +314,7 @@ export class GameScene extends Phaser.Scene {
 
       this.victoryRestartText = this.add.text(
         centerX,
-        screenHeight / 2 + 50,
+        centerY + 50,
         this.restartHintText(),
         {
           fontSize: '32px',
@@ -323,17 +333,15 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private renderDPad(panelX: number, panelWidth: number): void {
-    const cx = panelX + panelWidth / 2;
+  private renderDPad(cx: number, cy: number): void {
     const buttons: Array<{ label: string; dx: number; dy: number; ox: number; oy: number }> = [
       { label: '↑', dx: 0, dy: -1, ox: 0, oy: -55 },
       { label: '↓', dx: 0, dy: 1, ox: 0, oy: 55 },
       { label: '←', dx: -1, dy: 0, ox: -55, oy: 0 },
       { label: '→', dx: 1, dy: 0, ox: 55, oy: 0 }
     ];
-    const centerY = 905;
     for (const b of buttons) {
-      const btn = this.add.text(cx + b.ox, centerY + b.oy, b.label, {
+      const btn = this.add.text(cx + b.ox, cy + b.oy, b.label, {
         fontSize: '32px',
         color: '#FFFFFF',
         backgroundColor: '#3a3a4a',

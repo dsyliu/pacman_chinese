@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 import { GameScene } from './scenes/GameScene';
+import { getCanvasDimensions } from './utils/layout';
+
+const dims = getCanvasDimensions();
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -8,8 +11,8 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [GameScene],
   scale: {
     mode: Phaser.Scale.FIT,
-    width: 1152,
-    height: 1112
+    width: dims.width,
+    height: dims.height
   },
   physics: {
     default: 'arcade',

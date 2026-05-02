@@ -157,6 +157,30 @@ describe('AudioManager', () => {
     expect(resumeFn).not.toHaveBeenCalled();
   });
 
+  it('playBackgroundMusic defers scheduling until AudioContext resume resolves (Android first-launch fix)', async () => {
+    let resolveResume: () => void = () => {};
+    const resumePromise = new Promise<void>(r => { resolveResume = r; });
+    const suspendedCtx: any = {
+      ...makeMockAudioContext(),
+      state: 'suspended',
+      resume: vi.fn(() => resumePromise)
+    };
+    vi.stubGlobal('AudioContext', vi.fn(() => suspendedCtx));
+
+    const am = new AudioManager({} as any);
+    am.playBackgroundMusic();
+    // Resume hasn't resolved yet → must NOT schedule notes against a
+    // still-suspended currentTime, otherwise on Android they fire silently.
+    expect(suspendedCtx.createOscillator).not.toHaveBeenCalled();
+
+    suspendedCtx.state = 'running';
+    resolveResume();
+    // Flush enough microtask hops to drain the resume().then().catch() chain.
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+
+    expect(suspendedCtx.createOscillator).toHaveBeenCalled();
+  });
+
   it('stopBackgroundMusic ramps the master gain to zero so queued notes go silent', () => {
     const am = new AudioManager({} as any);
     am.playBackgroundMusic();

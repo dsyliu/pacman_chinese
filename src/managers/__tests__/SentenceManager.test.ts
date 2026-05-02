@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SentenceManager } from '../SentenceManager';
 import { createSceneStub } from '../../test-utils/phaserMock';
-import { BOARD_PIXEL_WIDTH } from '../../entities/Maze';
+import { BOARD_PIXEL_WIDTH, BOARD_PIXEL_HEIGHT } from '../../entities/Maze';
 import type { LevelData } from '../../utils/types';
 
 const level: LevelData = {
@@ -110,5 +110,17 @@ describe('SentenceManager', () => {
 
     expect(sentenceCall![0]).toBe(BOARD_PIXEL_WIDTH / 2);
     expect(translationCall![0]).toBe(BOARD_PIXEL_WIDTH / 2);
+  });
+
+  it('sentence renders just below the maze regardless of canvas height (portrait stays anchored)', () => {
+    // In portrait the canvas is much taller; the sentence must NOT chase the
+    // bottom of the canvas — it should stay tucked under the maze.
+    scene.cameras.main.height = 2160;
+    mgr.initialize(level);
+
+    const calls = (scene.add.text as any).mock.calls as Array<any[]>;
+    const sentenceCall = calls.find(c => typeof c[2] === 'string' && c[2].includes('?'));
+    expect(sentenceCall![1]).toBeGreaterThanOrEqual(BOARD_PIXEL_HEIGHT);
+    expect(sentenceCall![1]).toBeLessThan(BOARD_PIXEL_HEIGHT + 120);
   });
 });
