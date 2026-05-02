@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SentenceManager } from '../SentenceManager';
 import { createSceneStub } from '../../test-utils/phaserMock';
+import { BOARD_PIXEL_WIDTH } from '../../entities/Maze';
 import type { LevelData } from '../../utils/types';
 
 const level: LevelData = {
@@ -93,5 +94,19 @@ describe('SentenceManager', () => {
 
   it('isComplete returns false before any level is initialized', () => {
     expect(mgr.isComplete()).toBe(false);
+  });
+
+  it('sentence and translation are centered on the maze midpoint, not the canvas midpoint', () => {
+    // Simulate the production canvas being wider than the maze so that
+    // the test would fail if the centering ever regresses to cameras.main.width / 2.
+    scene.cameras.main.width = BOARD_PIXEL_WIDTH + 256;
+    mgr.initialize(level);
+
+    const calls = (scene.add.text as any).mock.calls as Array<any[]>;
+    const sentenceCall = calls.find(c => typeof c[2] === 'string' && c[2].includes('?'));
+    const translationCall = calls.find(c => typeof c[2] === 'string' && c[2].includes('I love you'));
+
+    expect(sentenceCall![0]).toBe(BOARD_PIXEL_WIDTH / 2);
+    expect(translationCall![0]).toBe(BOARD_PIXEL_WIDTH / 2);
   });
 });

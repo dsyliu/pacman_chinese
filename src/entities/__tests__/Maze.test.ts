@@ -200,12 +200,80 @@ describe('Maze class', () => {
     expect(m.getPixelHeight()).toBe(Maze.ROWS * TILE_SIZE);
   });
 
-  it('destroy cleans up the underlying graphics object', () => {
+  it('destroy cleans up wall and dot graphics', () => {
     const scene = createSceneStub();
-    const graphics = createGraphicsStub();
-    scene.add.graphics = vi.fn(() => graphics);
+    const stubs: any[] = [];
+    scene.add.graphics = vi.fn(() => {
+      const s = createGraphicsStub();
+      stubs.push(s);
+      return s;
+    });
     const m = new Maze(scene as any, 0);
     m.destroy();
-    expect(graphics.destroy).toHaveBeenCalledOnce();
+    expect(stubs).toHaveLength(2);
+    expect(stubs[0].destroy).toHaveBeenCalledOnce();
+    expect(stubs[1].destroy).toHaveBeenCalledOnce();
+  });
+
+  it('hasDot is false on every tile before spawnDots is called', () => {
+    const m = new Maze(createSceneStub() as any, 0);
+    for (let r = 0; r < Maze.ROWS; r++) {
+      for (let c = 0; c < Maze.COLS; c++) {
+        expect(m.hasDot(c, r)).toBe(false);
+      }
+    }
+  });
+
+  it('spawnDots places a dot on every path tile except the excluded one', () => {
+    const m = new Maze(createSceneStub() as any, 0);
+    m.spawnDots(PACMAN_START_COL, PACMAN_START_ROW);
+
+    expect(m.hasDot(PACMAN_START_COL, PACMAN_START_ROW)).toBe(false);
+    for (let r = 0; r < Maze.ROWS; r++) {
+      for (let c = 0; c < Maze.COLS; c++) {
+        if (m.isWall(c, r)) {
+          expect(m.hasDot(c, r)).toBe(false);
+        } else if (c === PACMAN_START_COL && r === PACMAN_START_ROW) {
+          expect(m.hasDot(c, r)).toBe(false);
+        } else {
+          expect(m.hasDot(c, r)).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('tryEatDot removes a present dot and returns true; subsequent calls return false', () => {
+    const m = new Maze(createSceneStub() as any, 0);
+    m.spawnDots(PACMAN_START_COL, PACMAN_START_ROW);
+
+    const tile = m.getPathTiles().find(t => t.col !== PACMAN_START_COL || t.row !== PACMAN_START_ROW)!;
+    expect(m.hasDot(tile.col, tile.row)).toBe(true);
+    expect(m.tryEatDot(tile.col, tile.row)).toBe(true);
+    expect(m.hasDot(tile.col, tile.row)).toBe(false);
+    expect(m.tryEatDot(tile.col, tile.row)).toBe(false);
+  });
+
+  it('tryEatDot on a wall tile returns false', () => {
+    const m = new Maze(createSceneStub() as any, 0);
+    m.spawnDots(PACMAN_START_COL, PACMAN_START_ROW);
+
+    const wallTile = (() => {
+      for (let r = 0; r < Maze.ROWS; r++) {
+        for (let c = 0; c < Maze.COLS; c++) {
+          if (m.isWall(c, r)) return { col: c, row: r };
+        }
+      }
+      throw new Error('no wall found');
+    })();
+    expect(m.tryEatDot(wallTile.col, wallTile.row)).toBe(false);
+  });
+
+  it('tryEatDot on out-of-bounds coordinates returns false', () => {
+    const m = new Maze(createSceneStub() as any, 0);
+    m.spawnDots(PACMAN_START_COL, PACMAN_START_ROW);
+    expect(m.tryEatDot(-1, 0)).toBe(false);
+    expect(m.tryEatDot(0, -1)).toBe(false);
+    expect(m.tryEatDot(Maze.COLS, 0)).toBe(false);
+    expect(m.tryEatDot(0, Maze.ROWS)).toBe(false);
   });
 });

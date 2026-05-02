@@ -64,6 +64,7 @@ export function createGraphicsStub() {
     clear: vi.fn(),
     fillStyle: vi.fn(),
     fillRect: vi.fn(),
+    fillCircle: vi.fn(),
     lineStyle: vi.fn(),
     strokeRect: vi.fn(),
     beginPath: vi.fn(),
@@ -76,7 +77,7 @@ export function createGraphicsStub() {
 }
 
 export function createTextStub(text: string = '') {
-  return {
+  const stub: any = {
     text,
     visible: true,
     setOrigin: vi.fn().mockReturnThis(),
@@ -84,8 +85,13 @@ export function createTextStub(text: string = '') {
     setVisible: vi.fn().mockReturnThis(),
     setDepth: vi.fn().mockReturnThis(),
     setScrollFactor: vi.fn().mockReturnThis(),
+    setText: vi.fn(function (this: any, t: string) {
+      this.text = t;
+      return this;
+    }),
     destroy: vi.fn()
   };
+  return stub;
 }
 
 export function createKey(): any {

@@ -9,7 +9,7 @@ import { GameScene } from '../GameScene';
 import { DataLoader } from '../../managers/DataLoader';
 import { GameState } from '../../utils/types';
 import { createSceneStub } from '../../test-utils/phaserMock';
-import { TILE_SIZE } from '../../entities/Maze';
+import { TILE_SIZE, BOARD_PIXEL_WIDTH } from '../../entities/Maze';
 
 const sampleLevel = {
   id: 1,
@@ -51,6 +51,7 @@ describe('GameScene', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    sessionStorage.clear();
   });
 
   it('constructs with the expected scene key', () => {
@@ -188,6 +189,112 @@ describe('GameScene', () => {
     expect(gameOverRestart.setDepth).toHaveBeenCalled();
     const restartDepth = gameOverRestart.setDepth.mock.calls[0][0];
     expect(restartDepth).toBeGreaterThanOrEqual(1000);
+  });
+
+  it('create() spawns dots on every path tile except the Pacman start', async () => {
+    const { scene } = await buildGame();
+    const maze = (scene as any).maze;
+    expect(maze.hasDot(13, 24)).toBe(false);
+    const pathTiles = maze.getPathTiles() as Array<{ col: number; row: number }>;
+    const sample = pathTiles.find(t => !(t.col === 13 && t.row === 24))!;
+    expect(maze.hasDot(sample.col, sample.row)).toBe(true);
+  });
+
+  it('scoreboard panel renders at the right of the maze (panelX = BOARD_PIXEL_WIDTH)', async () => {
+    const { stub } = await buildGame();
+    const textCalls = (stub.add.text as any).mock.calls as Array<any[]>;
+    const scorePanelXValues = textCalls
+      .filter(c => typeof c[2] === 'string' && ['SCORE', 'STATS', 'Played', 'Won', 'Lost'].includes(c[2]))
+      .map(c => c[0]);
+    expect(scorePanelXValues.length).toBeGreaterThan(0);
+    for (const x of scorePanelXValues) {
+      expect(x).toBeGreaterThanOrEqual(BOARD_PIXEL_WIDTH);
+    }
+  });
+
+  it('end-screen and splash text are centered on the maze midpoint, not the canvas midpoint', async () => {
+    const { scene, stub } = await buildGame({ autoStart: false });
+    const splashCall = (stub.add.text as any).mock.calls.find(
+      (c: any[]) => typeof c[2] === 'string' && /Start/i.test(c[2])
+    );
+    expect(splashCall![0]).toBe(BOARD_PIXEL_WIDTH / 2);
+
+    (scene as any).beginGame();
+    const pacman = (scene as any).pacman;
+    const ghosts = (scene as any).ghosts as any[];
+    const wrongGhost = ghosts.find(g => !g.getIsCorrect());
+    wrongGhost.x = pacman.x;
+    wrongGhost.y = pacman.y;
+    scene.update(0, 16);
+
+    const gameOverCall = (stub.add.text as any).mock.calls.find(
+      (c: any[]) => typeof c[2] === 'string' && c[2] === 'Game Over!'
+    );
+    expect(gameOverCall![0]).toBe(BOARD_PIXEL_WIDTH / 2);
+  });
+
+  it('eating a dot via update() increments scoreboard points by 1', async () => {
+    const { scene } = await buildGame();
+    const maze = (scene as any).maze;
+    const pacman = (scene as any).pacman;
+    const scoreboard = (scene as any).scoreboardManager;
+
+    // Pick a tile too close to Pacman start for any ghost to spawn there
+    // (ghosts require Manhattan >= 5), and not the start tile itself
+    // (which has no dot).
+    const dotTile = (maze.getPathTiles() as Array<{ col: number; row: number }>)
+      .find(t => {
+        if (t.col === 13 && t.row === 24) return false;
+        return Math.abs(t.col - 13) + Math.abs(t.row - 24) < 5;
+      })!;
+    expect(maze.hasDot(dotTile.col, dotTile.row)).toBe(true);
+
+    const center = maze.tileToWorld(dotTile.col, dotTile.row);
+    pacman.x = center.x;
+    pacman.y = center.y;
+
+    const before = scoreboard.getStats().points;
+    scene.update(0, 16);
+    expect(scoreboard.getStats().points).toBe(before + 1);
+    expect(maze.hasDot(dotTile.col, dotTile.row)).toBe(false);
+
+    // Idempotent — no double-counting on subsequent frames over an already-eaten tile.
+    scene.update(0, 16);
+    expect(scoreboard.getStats().points).toBe(before + 1);
+  });
+
+  it('game-over records a loss on the scoreboard', async () => {
+    const { scene } = await buildGame();
+    const scoreboard = (scene as any).scoreboardManager;
+    const pacman = (scene as any).pacman;
+    const ghosts = (scene as any).ghosts as any[];
+    const wrongGhost = ghosts.find(g => !g.getIsCorrect());
+    wrongGhost.x = pacman.x;
+    wrongGhost.y = pacman.y;
+
+    const before = scoreboard.getStats();
+    scene.update(0, 16);
+    const after = scoreboard.getStats();
+    expect(after.lost).toBe(before.lost + 1);
+    expect(after.won).toBe(before.won);
+    expect(after.points).toBe(before.points); // no bonus on loss
+  });
+
+  it('victory records a win plus a 100-point bonus on the scoreboard', async () => {
+    const { scene } = await buildGame();
+    const scoreboard = (scene as any).scoreboardManager;
+    const pacman = (scene as any).pacman;
+    const ghosts = (scene as any).ghosts as any[];
+
+    const before = scoreboard.getStats();
+    for (const g of ghosts.filter(g => g.getIsCorrect())) {
+      g.x = pacman.x;
+      g.y = pacman.y;
+      scene.update(0, 16);
+    }
+    const after = scoreboard.getStats();
+    expect(after.won).toBe(before.won + 1);
+    expect(after.points).toBeGreaterThanOrEqual(before.points + 100);
   });
 
   it('victory text is given a high depth so the maze cannot cover it', async () => {

@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 
 export const TILE_SIZE = 32;
+export const BOARD_COLS = 28;
+export const BOARD_ROWS = 31;
+export const BOARD_PIXEL_WIDTH = BOARD_COLS * TILE_SIZE;
+export const BOARD_PIXEL_HEIGHT = BOARD_ROWS * TILE_SIZE;
 
 export const LAYOUTS: string[][] = [
   // Maze 0 — classic Pac-Man style
@@ -114,13 +118,44 @@ export class Maze {
   static readonly LAYOUT_COUNT = LAYOUTS.length;
 
   private grid: boolean[][];
+  private dotGrid: boolean[][];
   private graphics: Phaser.GameObjects.Graphics;
+  private dotGraphics: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene, layoutIndex: number = 0) {
     const layout = LAYOUTS[layoutIndex] ?? LAYOUTS[0];
     this.grid = layout.map(row => row.split('').map(ch => ch === '#'));
+    this.dotGrid = [];
+    for (let r = 0; r < Maze.ROWS; r++) {
+      this.dotGrid[r] = new Array(Maze.COLS).fill(false);
+    }
     this.graphics = scene.add.graphics();
+    this.dotGraphics = scene.add.graphics();
     this.render();
+  }
+
+  spawnDots(excludeCol: number, excludeRow: number): void {
+    for (let r = 0; r < Maze.ROWS; r++) {
+      for (let c = 0; c < Maze.COLS; c++) {
+        const isPath = !this.grid[r][c];
+        const isExcluded = c === excludeCol && r === excludeRow;
+        this.dotGrid[r][c] = isPath && !isExcluded;
+      }
+    }
+    this.redrawDots();
+  }
+
+  tryEatDot(col: number, row: number): boolean {
+    if (col < 0 || col >= Maze.COLS || row < 0 || row >= Maze.ROWS) return false;
+    if (!this.dotGrid[row][col]) return false;
+    this.dotGrid[row][col] = false;
+    this.redrawDots();
+    return true;
+  }
+
+  hasDot(col: number, row: number): boolean {
+    if (col < 0 || col >= Maze.COLS || row < 0 || row >= Maze.ROWS) return false;
+    return this.dotGrid[row][col];
   }
 
   isWall(col: number, row: number): boolean {
@@ -166,6 +201,20 @@ export class Maze {
 
   destroy(): void {
     this.graphics.destroy();
+    this.dotGraphics.destroy();
+  }
+
+  private redrawDots(): void {
+    this.dotGraphics.clear();
+    this.dotGraphics.fillStyle(0xFFE0A0, 1);
+    for (let r = 0; r < Maze.ROWS; r++) {
+      for (let c = 0; c < Maze.COLS; c++) {
+        if (!this.dotGrid[r][c]) continue;
+        const cx = c * TILE_SIZE + TILE_SIZE / 2;
+        const cy = r * TILE_SIZE + TILE_SIZE / 2;
+        this.dotGraphics.fillCircle(cx, cy, 3);
+      }
+    }
   }
 
   private render(): void {

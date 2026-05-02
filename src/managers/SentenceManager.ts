@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { BOARD_PIXEL_WIDTH } from '../entities/Maze';
 import type { LevelData, CollectedCharacter } from '../utils/types';
 
 export class SentenceManager {
@@ -46,8 +47,8 @@ export class SentenceManager {
       this.translationText = null;
     }
 
-    const screenWidth = this.scene.cameras.main.width;
     const screenHeight = this.scene.cameras.main.height;
+    const centerX = BOARD_PIXEL_WIDTH / 2;
     const yPosition = screenHeight - 80;
 
     // Build the sentence with filled blanks
@@ -70,7 +71,7 @@ export class SentenceManager {
 
     // Create text object
     this.sentenceText = this.scene.add.text(
-      screenWidth / 2,
+      centerX,
       yPosition,
       displayText,
       {
@@ -84,7 +85,7 @@ export class SentenceManager {
 
     // Add translation below
     this.translationText = this.scene.add.text(
-      screenWidth / 2,
+      centerX,
       yPosition + 50,
       `(${this.levelData.translation})`,
       {

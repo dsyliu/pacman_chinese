@@ -8,7 +8,7 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [GameScene],
   scale: {
     mode: Phaser.Scale.FIT,
-    width: 896,
+    width: 1152,
     height: 1112
   },
   physics: {

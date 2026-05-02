@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import { Pacman } from '../entities/Pacman';
 import { CharacterGhost } from '../entities/CharacterGhost';
-import { Maze, TILE_SIZE } from '../entities/Maze';
+import { Maze, TILE_SIZE, BOARD_PIXEL_WIDTH } from '../entities/Maze';
 import { SentenceManager } from '../managers/SentenceManager';
 import { GameStateManager } from '../managers/GameState';
 import { DataLoader } from '../managers/DataLoader';
 import { AudioManager } from '../managers/AudioManager';
+import { ScoreboardManager } from '../managers/ScoreboardManager';
 import { GameState } from '../utils/types';
 import type { LevelData } from '../utils/types';
 
@@ -21,6 +22,7 @@ export class GameScene extends Phaser.Scene {
   private sentenceManager!: SentenceManager;
   private gameStateManager!: GameStateManager;
   private audioManager!: AudioManager;
+  private scoreboardManager!: ScoreboardManager;
   private levelData: LevelData | null = null;
   private gameOverText: Phaser.GameObjects.Text | null = null;
   private victoryText: Phaser.GameObjects.Text | null = null;
@@ -46,6 +48,7 @@ export class GameScene extends Phaser.Scene {
     this.gameStateManager = new GameStateManager();
     this.sentenceManager = new SentenceManager(this);
     this.audioManager = new AudioManager(this);
+    this.scoreboardManager = new ScoreboardManager(this);
 
     const gameData = await DataLoader.loadData();
     if (gameData.levels.length > 0) {
@@ -61,10 +64,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.maze = new Maze(this, Math.floor(Math.random() * Maze.LAYOUT_COUNT));
+    this.maze.spawnDots(PACMAN_START_COL, PACMAN_START_ROW);
     this.setupPacman();
     this.spawnGhosts();
     this.sentenceManager.initialize(this.levelData);
     this.gameStateManager.initializeLevel(this.levelData.correctChars.length);
+
+    const panelX = BOARD_PIXEL_WIDTH;
+    const panelWidth = this.cameras.main.width - BOARD_PIXEL_WIDTH;
+    this.scoreboardManager.render(panelX, panelWidth);
+
     // Hold the game in MENU until the user dismisses the start splash;
     // this also satisfies the browser autoplay policy on the same gesture.
     this.gameStateManager.setState(GameState.MENU);
@@ -73,9 +82,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private showStartSplash(): void {
-    const w = this.cameras.main.width;
     const h = this.cameras.main.height;
-    this.startSplashText = this.add.text(w / 2, h / 2, 'Click or Press Any Key to Start', {
+    this.startSplashText = this.add.text(BOARD_PIXEL_WIDTH / 2, h / 2, 'Click or Press Any Key to Start', {
       fontSize: '40px',
       color: '#FFFF00',
       fontFamily: 'Arial, sans-serif'
@@ -153,6 +161,10 @@ export class GameScene extends Phaser.Scene {
 
     this.pacman.update(time, delta);
 
+    if (this.maze.tryEatDot(this.pacman.getGridX(), this.pacman.getGridY())) {
+      this.scoreboardManager.addPoints(1);
+    }
+
     for (const ghost of this.ghosts) {
       if (!ghost.isCollected()) {
         ghost.update(delta);
@@ -209,13 +221,14 @@ export class GameScene extends Phaser.Scene {
   private gameOver(): void {
     this.gameStateManager.setState(GameState.GAME_OVER);
     this.audioManager.playGameOverMusic();
+    this.scoreboardManager.recordLoss();
 
     if (!this.gameOverText) {
-      const screenWidth = this.cameras.main.width;
+      const centerX = BOARD_PIXEL_WIDTH / 2;
       const screenHeight = this.cameras.main.height;
 
       this.gameOverText = this.add.text(
-        screenWidth / 2,
+        centerX,
         screenHeight / 2 - 50,
         'Game Over!',
         {
@@ -228,7 +241,7 @@ export class GameScene extends Phaser.Scene {
       this.gameOverText.setDepth(1000);
 
       this.gameOverRestartText = this.add.text(
-        screenWidth / 2,
+        centerX,
         screenHeight / 2 + 50,
         'Press Space to Restart',
         {
@@ -250,13 +263,15 @@ export class GameScene extends Phaser.Scene {
   private victory(): void {
     this.gameStateManager.setState(GameState.VICTORY);
     this.audioManager.playVictoryMusic();
+    this.scoreboardManager.addWinBonus();
+    this.scoreboardManager.recordWin();
 
     if (!this.victoryText) {
-      const screenWidth = this.cameras.main.width;
+      const centerX = BOARD_PIXEL_WIDTH / 2;
       const screenHeight = this.cameras.main.height;
 
       this.victoryText = this.add.text(
-        screenWidth / 2,
+        centerX,
         screenHeight / 2 - 50,
         'Victory!',
         {
@@ -269,7 +284,7 @@ export class GameScene extends Phaser.Scene {
       this.victoryText.setDepth(1000);
 
       this.victoryRestartText = this.add.text(
-        screenWidth / 2,
+        centerX,
         screenHeight / 2 + 50,
         'Press SPACE to Restart',
         {
@@ -321,6 +336,7 @@ export class GameScene extends Phaser.Scene {
     this.gameStateManager.reset();
 
     this.maze = new Maze(this, Math.floor(Math.random() * Maze.LAYOUT_COUNT));
+    this.maze.spawnDots(PACMAN_START_COL, PACMAN_START_ROW);
     this.setupPacman();
     this.spawnGhosts();
     this.sentenceManager.initialize(this.levelData);
