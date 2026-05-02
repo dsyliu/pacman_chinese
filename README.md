@@ -4,7 +4,7 @@ An educational browser-based game that helps young students learn Chinese charac
 
 ## About the Game
 
-This game combines entertainment with education to make learning Chinese characters fun and engaging. The game displays a sentence with missing characters (shown as empty squares □), and players control Pacman through a 28×31 tile maze to collect only the correct Chinese character "ghosts" that complete the sentence. Collecting wrong characters results in game over, while collecting all correct characters leads to victory.
+This game combines entertainment with education to make learning Chinese characters fun and engaging. The game displays a sentence with missing characters (shown as `?`), and players control Pacman through a 28×31 tile maze to collect only the correct Chinese character "ghosts" that complete the sentence. Collecting wrong characters results in game over, while collecting all correct characters leads to victory.
 
 Each game randomly selects one of three hand-designed mazes and one sentence from `data/sentences.json`, so no two playthroughs are identical. The canvas auto-scales to fit any browser viewport.
 
@@ -80,7 +80,7 @@ npm run preview
 
 1. The first time the game loads, a "Click or Press Any Key to Start" splash appears — this also unlocks browser audio so the music plays from the very first move.
 2. A sentence with missing characters is displayed at the bottom of the screen.
-3. Missing characters are shown as empty squares (□).
+3. Missing characters are shown as `?`.
 4. Chinese character "ghosts" wander through the maze corridors, picking random valid directions at each intersection.
 5. Control Pacman through the maze to collect only the **correct** characters that complete the sentence.
 6. Pacman is grid-aligned: queue a turn before reaching an intersection and it will turn when the path opens.

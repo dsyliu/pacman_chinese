@@ -39,7 +39,7 @@ Single-scene Phaser 3 game written in TypeScript. The only Phaser scene is `Game
 
 **Level data** (`data/sentences.json`): Fetched at runtime by `DataLoader` (cached after first load). A random level is selected on each play/restart. The `sentence` field uses spaces/underscores to mark blank positions; `blanks` is an array of character indices where blanks appear; `correctChars` and `wrongChars` are the ghost populations.
 
-**Sentence display** (`SentenceManager`): Rebuilds Phaser `Text` objects from scratch on every character collection. Blanks are shown as `□` until filled.
+**Sentence display** (`SentenceManager`): Rebuilds Phaser `Text` objects from scratch on every character collection. Blanks are shown as `?` with single ASCII spaces on either side (e.g. `我 ? 你`) until filled. Filled blanks keep the same surrounding spaces (`我 愛 你`) so the layout doesn't shift when a character is collected.
 
 **State machine**: Four states defined in `src/utils/types.ts` — `MENU`, `PLAYING`, `GAME_OVER`, `VICTORY`. `GameScene.update` is gated on `PLAYING`; transitions are triggered by collision outcomes. After `create()`, the scene holds in `MENU` and shows a "Click or Press Any Key to Start" splash (depth 2000); the first interaction calls `beginGame()`, which destroys the splash, resumes the audio context, starts background music, and transitions to `PLAYING`. Restarts after game-over/victory skip the splash since audio is already unlocked.
 

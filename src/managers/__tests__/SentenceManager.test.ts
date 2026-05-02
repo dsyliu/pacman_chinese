@@ -37,7 +37,7 @@ describe('SentenceManager', () => {
   it('initialize draws sentence and translation text', () => {
     mgr.initialize(level);
     const created = lastTexts(scene);
-    const sentenceText = created.find((t: any) => t.text.includes('□'));
+    const sentenceText = created.find((t: any) => t.text.includes('?'));
     const translationText = created.find((t: any) => t.text.includes('I love you'));
     expect(sentenceText).toBeDefined();
     expect(translationText).toBeDefined();
@@ -46,15 +46,15 @@ describe('SentenceManager', () => {
   it('strips literal underscores from the displayed sentence', () => {
     mgr.initialize(level);
     const created = lastTexts(scene);
-    const sentenceText = created.find((t: any) => t.text.includes('□'));
+    const sentenceText = created.find((t: any) => t.text.includes('?'));
     expect(sentenceText.text).not.toContain('_');
   });
 
-  it('renders blanks as □ when nothing has been collected', () => {
+  it('renders blanks as ? with surrounding spaces when nothing has been collected', () => {
     mgr.initialize(level);
     const created = lastTexts(scene);
-    const sentenceText = created.find((t: any) => t.text.includes('□'));
-    expect(sentenceText.text).toBe('我□你');
+    const sentenceText = created.find((t: any) => t.text.includes('?'));
+    expect(sentenceText.text).toBe('我 ? 你');
   });
 
   it('collectCharacter fills the matching blank', () => {
@@ -62,7 +62,7 @@ describe('SentenceManager', () => {
     mgr.collectCharacter('愛', 0);
     const created = lastTexts(scene);
     const filled = created[created.length - 2];
-    expect(filled.text).toBe('我愛你');
+    expect(filled.text).toBe('我 愛 你');
     expect(mgr.isComplete()).toBe(true);
   });
 

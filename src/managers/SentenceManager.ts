@@ -58,11 +58,7 @@ export class SentenceManager {
     for (let i = 0; i < sentenceChars.length; i++) {
       if (this.levelData.blanks.includes(i)) {
         const collected = this.collectedChars.find(c => c.blankIndex === blankIndex);
-        if (collected) {
-          displayText += collected.char;
-        } else {
-          displayText += '□'; // Empty square to indicate missing character
-        }
+        displayText += ' ' + (collected ? collected.char : '?') + ' ';
         blankIndex++;
       } else {
         // Skip underscores - they're just placeholders in the data
