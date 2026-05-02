@@ -77,7 +77,7 @@ export class AudioManager {
     osc.stop(startTime + duration + 0.02);
   }
 
-  private createBackgroundMusic(): void {
+  private createBackgroundMusic(initialOffset: number = 0.05): void {
     if (!this.audioContext) return;
 
     // Master gain for instant cutoff on stopBackgroundMusic
@@ -106,7 +106,7 @@ export class AudioManager {
       });
     };
 
-    this.nextPatternTime = this.audioContext.currentTime + 0.05;
+    this.nextPatternTime = this.audioContext.currentTime + initialOffset;
     schedulePattern(this.nextPatternTime);
     this.nextPatternTime += patternDuration;
 
@@ -182,33 +182,29 @@ export class AudioManager {
 
     this.stopBackgroundMusic();
 
-    // Android Chrome will silently drop audio for oscillators created
-    // *outside* the originating user gesture, even if state has become
-    // 'running'. The deferred .then() below fires as a microtask after the
-    // gesture stack unwinds, which is past the gesture window. Priming the
-    // pipeline with a zero-gain oscillator synchronously here ensures the
-    // browser sees audio creation inside the gesture, after which the
-    // deferred music scheduling actually produces sound.
+    // Android Chrome (strict autoplay) silently drops audio for oscillators
+    // created OUTSIDE the originating user gesture, even when state has
+    // transitioned to 'running'. A previous attempt deferred scheduling to
+    // a resume().then() microtask, but that runs after the gesture stack
+    // unwinds — which is exactly the case Android punishes. So here we
+    // schedule everything synchronously, in-gesture: warmup, resume, and
+    // the first pattern of music notes.
     this.warmupAudioPipeline();
 
-    // On Android (and any browser with a stricter autoplay policy) the
-    // AudioContext starts suspended. Scheduling notes against its
-    // not-yet-running currentTime makes them fire silently, so defer the
-    // scheduling until resume() actually resolves.
-    if (this.audioContext.state === 'suspended' && typeof this.audioContext.resume === 'function') {
-      this.audioContext.resume()
-        .then(() => {
-          if (!this.isMuted && this.audioContext) {
-            this.createBackgroundMusic();
-          }
-        })
-        .catch(() => {
-          // ignore — user gesture will retry on next interaction
-        });
-      return;
+    const wasSuspended = this.audioContext.state === 'suspended';
+    if (wasSuspended && typeof this.audioContext.resume === 'function') {
+      this.audioContext.resume().catch(() => {
+        // ignore — a later gesture will retry
+      });
     }
 
-    this.createBackgroundMusic();
+    // When state was 'suspended' on entry, currentTime is frozen at its
+    // suspension point. Per the Web Audio spec, oscillators scheduled while
+    // suspended stay queued and play once the context resumes — but to
+    // absorb resume() latency we push the first note 0.3s into the future.
+    // When already running, a tight 0.05s offset gives near-immediate start.
+    const initialOffset = wasSuspended ? 0.3 : 0.05;
+    this.createBackgroundMusic(initialOffset);
   }
 
   private warmupAudioPipeline(): void {

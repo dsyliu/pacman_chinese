@@ -157,37 +157,12 @@ describe('AudioManager', () => {
     expect(resumeFn).not.toHaveBeenCalled();
   });
 
-  it('playBackgroundMusic defers music scheduling until AudioContext resume resolves (Android first-launch fix)', async () => {
-    let resolveResume: () => void = () => {};
-    const resumePromise = new Promise<void>(r => { resolveResume = r; });
-    const suspendedCtx: any = {
-      ...makeMockAudioContext(),
-      state: 'suspended',
-      resume: vi.fn(() => resumePromise)
-    };
-    vi.stubGlobal('AudioContext', vi.fn(() => suspendedCtx));
-
-    const am = new AudioManager({} as any);
-    am.playBackgroundMusic();
-    // Resume hasn't resolved yet → only the synchronous warmup oscillator
-    // (one) should have been created. The 16-note melody must be deferred
-    // so it doesn't fire silently against a still-suspended currentTime.
-    expect(suspendedCtx.createOscillator).toHaveBeenCalledTimes(1);
-    const callsAfterWarmup = suspendedCtx.createOscillator.mock.calls.length;
-
-    suspendedCtx.state = 'running';
-    resolveResume();
-    // Flush enough microtask hops to drain the resume().then().catch() chain.
-    for (let i = 0; i < 5; i++) await Promise.resolve();
-
-    expect(suspendedCtx.createOscillator.mock.calls.length).toBeGreaterThan(callsAfterWarmup);
-  });
-
-  it('playBackgroundMusic primes the audio pipeline with a zero-gain warmup oscillator inside the user gesture (Android fix)', () => {
-    // Android Chrome silently drops audio for oscillators created outside
-    // the originating user gesture. The warmup ensures the browser sees
-    // audio creation inside the gesture so the deferred music scheduling
-    // actually produces sound.
+  it('playBackgroundMusic schedules music synchronously inside the user gesture even when AudioContext is suspended (Android fix)', () => {
+    // Android Chrome silently drops audio for oscillators created OUTSIDE
+    // the originating user gesture. Deferring to a resume().then() callback
+    // pushes scheduling out-of-gesture and the music goes silent. Schedule
+    // everything synchronously instead, even when state is 'suspended' —
+    // queued oscillators play once the context resumes.
     const suspendedCtx: any = {
       ...makeMockAudioContext(),
       state: 'suspended',
@@ -198,13 +173,51 @@ describe('AudioManager', () => {
     const am = new AudioManager({} as any);
     am.playBackgroundMusic();
 
-    // Exactly one oscillator (the warmup) should have been created
-    // synchronously, even though resume() never resolves.
-    expect(suspendedCtx.createOscillator).toHaveBeenCalledTimes(1);
+    // Resume should be requested synchronously
+    expect(suspendedCtx.resume).toHaveBeenCalled();
+    // Music should be scheduled synchronously: warmup (1) + 16 melody notes
+    // = at least 17 oscillators created before resume() resolves.
+    expect(suspendedCtx.createOscillator.mock.calls.length).toBeGreaterThanOrEqual(17);
+  });
+
+  it('playBackgroundMusic primes the audio pipeline with a zero-gain warmup oscillator inside the user gesture (Android fix)', () => {
+    // Android Chrome silently drops audio for oscillators created outside
+    // the originating user gesture. The warmup ensures the browser sees
+    // audio creation inside the gesture.
+    const suspendedCtx: any = {
+      ...makeMockAudioContext(),
+      state: 'suspended',
+      resume: vi.fn(() => new Promise(() => {})) // never resolves
+    };
+    vi.stubGlobal('AudioContext', vi.fn(() => suspendedCtx));
+
+    const am = new AudioManager({} as any);
+    am.playBackgroundMusic();
+
     // First gain node belongs to the warmup and must be zero-gain so it
     // doesn't actually emit sound.
     const warmupGain = suspendedCtx.createGain.mock.results[0].value;
     expect(warmupGain.gain.value).toBe(0);
+  });
+
+  it('playBackgroundMusic uses a longer initial note offset when AudioContext was suspended (Android resume-latency buffer)', () => {
+    const suspendedCtx: any = {
+      ...makeMockAudioContext(),
+      state: 'suspended',
+      currentTime: 0,
+      resume: vi.fn(() => new Promise(() => {}))
+    };
+    vi.stubGlobal('AudioContext', vi.fn(() => suspendedCtx));
+
+    const am = new AudioManager({} as any);
+    am.playBackgroundMusic();
+
+    // The first scheduled note (after the warmup) should be at least 0.2s
+    // in the future, to absorb resume() latency before audio starts.
+    // oscStarts has [warmup_start, note0_start, note1_start, ...]; the
+    // warmup uses currentTime (0), the first melody note uses initialOffset.
+    const firstMelodyStart = oscStarts[1];
+    expect(firstMelodyStart).toBeGreaterThanOrEqual(0.2);
   });
 
   it('stopBackgroundMusic ramps the master gain to zero so queued notes go silent', () => {
