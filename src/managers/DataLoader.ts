@@ -22,8 +22,7 @@ export class DataLoader {
         levels: [
           {
             id: 1,
-            sentence: "我__你",
-            blanks: [1],
+            sentence: "我 你",
             correctChars: ["爱"],
             wrongChars: ["恨", "怕", "想"],
             translation: "I love you"

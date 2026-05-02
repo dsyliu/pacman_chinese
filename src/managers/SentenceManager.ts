@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BOARD_PIXEL_WIDTH } from '../entities/Maze';
+import { getBlankIndices } from '../utils/sentence';
 import type { LevelData, CollectedCharacter } from '../utils/types';
 
 export class SentenceManager {
@@ -54,18 +55,16 @@ export class SentenceManager {
     // Build the sentence with filled blanks
     let displayText = '';
     const sentenceChars = this.levelData.sentence.split('');
+    const blankPositions = new Set(getBlankIndices(this.levelData.sentence));
     let blankIndex = 0;
 
     for (let i = 0; i < sentenceChars.length; i++) {
-      if (this.levelData.blanks.includes(i)) {
+      if (blankPositions.has(i)) {
         const collected = this.collectedChars.find(c => c.blankIndex === blankIndex);
         displayText += ' ' + (collected ? collected.char : '?') + ' ';
         blankIndex++;
       } else {
-        // Skip underscores - they're just placeholders in the data
-        if (sentenceChars[i] !== '_') {
-          displayText += sentenceChars[i];
-        }
+        displayText += sentenceChars[i];
       }
     }
 

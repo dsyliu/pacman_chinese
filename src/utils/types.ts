@@ -1,7 +1,6 @@
 export interface LevelData {
   id: number;
   sentence: string;
-  blanks: number[]; // Indices where blanks appear
   correctChars: string[];
   wrongChars: string[];
   translation: string;

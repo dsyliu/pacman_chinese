@@ -98,7 +98,6 @@ Edit `data/sentences.json` to add or modify sentences:
     {
       "id": 1,
       "sentence": "我 你",
-      "blanks": [1],
       "correctChars": ["愛"],
       "wrongChars": ["恨", "怕", "想", "看", "打"],
       "translation": "I love you"
@@ -107,9 +106,8 @@ Edit `data/sentences.json` to add or modify sentences:
 }
 ```
 
-- `sentence`: The sentence with spaces where blanks should appear
-- `blanks`: Array of character indices where blanks are located
-- `correctChars`: Array of correct Chinese characters to complete the sentence
+- `sentence`: The sentence with an ASCII space at every blank position. Two consecutive blanks need two spaces (e.g. `"上山找  "`).
+- `correctChars`: Array of correct Chinese characters to complete the sentence (in the order they fill the blanks left-to-right)
 - `wrongChars`: Array of wrong characters that will appear as obstacles
 - `translation`: English translation (displayed below the sentence)
 

@@ -13,8 +13,7 @@ import { TILE_SIZE, BOARD_PIXEL_WIDTH } from '../../entities/Maze';
 
 const sampleLevel = {
   id: 1,
-  sentence: 'a b',
-  blanks: [0],
+  sentence: ' b',
   correctChars: ['X'],
   wrongChars: ['Y', 'Z'],
   translation: 'sample'

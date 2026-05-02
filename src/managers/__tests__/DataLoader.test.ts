@@ -6,7 +6,6 @@ const sampleData = {
     {
       id: 1,
       sentence: '我 你',
-      blanks: [1],
       correctChars: ['愛'],
       wrongChars: ['恨', '怕'],
       translation: 'I love you'
@@ -14,7 +13,6 @@ const sampleData = {
     {
       id: 2,
       sentence: '今 好',
-      blanks: [1],
       correctChars: ['天'],
       wrongChars: ['月'],
       translation: 'Today is good'

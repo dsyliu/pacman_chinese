@@ -37,7 +37,7 @@ Single-scene Phaser 3 game written in TypeScript. The only Phaser scene is `Game
 
 **Audio** (`src/managers/AudioManager.ts`): Uses the Web Audio API directly — no Phaser audio system. Background music is a looping 16-note I-vi-IV-V arpeggio, scheduled ahead-of-time via `setInterval` and routed through a `bgMasterGain` node so `stopBackgroundMusic` can ramp it to 0 instantly (otherwise pre-scheduled oscillators keep playing past game-end). Victory and game-over stings are one-shot note sequences. To satisfy the browser autoplay policy, `AudioManager` installs window/document-level capture-phase listeners on first user interaction and calls `audioContext.resume()` — but the **start splash in `GameScene` is what actually unlocks audio in practice**, since the same gesture both dismisses it and resumes the context.
 
-**Level data** (`data/sentences.json`): Fetched at runtime by `DataLoader` (cached after first load). A random level is selected on each play/restart. The `sentence` field uses spaces/underscores to mark blank positions; `blanks` is an array of character indices where blanks appear; `correctChars` and `wrongChars` are the ghost populations.
+**Level data** (`data/sentences.json`): Fetched at runtime by `DataLoader` (cached after first load). A random level is selected on each play/restart. The `sentence` field uses spaces (` `) to mark blank positions — there is no separate `blanks` array; `getBlankIndices(sentence)` in `src/utils/sentence.ts` derives indices from the spaces. `correctChars` and `wrongChars` are the ghost populations.
 
 **Sentence display** (`SentenceManager`): Rebuilds Phaser `Text` objects from scratch on every character collection. Blanks are shown as `?` with single ASCII spaces on either side (e.g. `我 ? 你`) until filled. Filled blanks keep the same surrounding spaces (`我 愛 你`) so the layout doesn't shift when a character is collected.
 
@@ -55,14 +55,13 @@ Single-scene Phaser 3 game written in TypeScript. The only Phaser scene is `Game
 {
   "id": 2,
   "sentence": "我 你",
-  "blanks": [1],
   "correctChars": ["愛"],
   "wrongChars": ["恨", "怕", "想", "看", "打"],
   "translation": "I love you"
 }
 ```
 
-- `sentence`: space/underscore between characters marks where blanks go; the index in `blanks` refers to the character position in the split array
+- `sentence`: each ASCII space character marks a blank — its position in the string is the blank's character index. To produce two consecutive blanks, use two spaces (e.g. `"上山找  "`).
 - Max 5 wrong ghosts are spawned (`MAX_WRONG_GHOSTS` constant in `GameScene.ts`)
 - Ghosts spawn at least 5 Manhattan-distance tiles from Pacman's start tile (col 13, row 24)
 

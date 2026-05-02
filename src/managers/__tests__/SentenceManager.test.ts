@@ -6,8 +6,7 @@ import type { LevelData } from '../../utils/types';
 
 const level: LevelData = {
   id: 1,
-  sentence: '我_你',
-  blanks: [1],
+  sentence: '我 你',
   correctChars: ['愛'],
   wrongChars: ['恨'],
   translation: 'I love you'
@@ -15,8 +14,7 @@ const level: LevelData = {
 
 const twoBlankLevel: LevelData = {
   id: 2,
-  sentence: 'a b c',
-  blanks: [0, 4],
+  sentence: ' b c d ',
   correctChars: ['X', 'Y'],
   wrongChars: [],
   translation: 'two blanks'
@@ -44,11 +42,15 @@ describe('SentenceManager', () => {
     expect(translationText).toBeDefined();
   });
 
-  it('strips literal underscores from the displayed sentence', () => {
-    mgr.initialize(level);
+  it('derives blank positions from spaces in the sentence', () => {
+    mgr.initialize(twoBlankLevel);
     const created = lastTexts(scene);
     const sentenceText = created.find((t: any) => t.text.includes('?'));
-    expect(sentenceText.text).not.toContain('_');
+    // ' b c d ' has spaces at indices 0, 2, 4, 6 — but only the leading and
+    // trailing positions are meaningful (correctChars has length 2). The
+    // helper returns all space indices; SentenceManager fills the first
+    // collected.length and shows '?' for the rest.
+    expect((sentenceText.text.match(/\?/g) || []).length).toBe(4);
   });
 
   it('renders blanks as ? with surrounding spaces when nothing has been collected', () => {
