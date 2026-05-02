@@ -157,7 +157,7 @@ describe('AudioManager', () => {
     expect(resumeFn).not.toHaveBeenCalled();
   });
 
-  it('playBackgroundMusic defers scheduling until AudioContext resume resolves (Android first-launch fix)', async () => {
+  it('playBackgroundMusic defers music scheduling until AudioContext resume resolves (Android first-launch fix)', async () => {
     let resolveResume: () => void = () => {};
     const resumePromise = new Promise<void>(r => { resolveResume = r; });
     const suspendedCtx: any = {
@@ -169,23 +169,51 @@ describe('AudioManager', () => {
 
     const am = new AudioManager({} as any);
     am.playBackgroundMusic();
-    // Resume hasn't resolved yet → must NOT schedule notes against a
-    // still-suspended currentTime, otherwise on Android they fire silently.
-    expect(suspendedCtx.createOscillator).not.toHaveBeenCalled();
+    // Resume hasn't resolved yet → only the synchronous warmup oscillator
+    // (one) should have been created. The 16-note melody must be deferred
+    // so it doesn't fire silently against a still-suspended currentTime.
+    expect(suspendedCtx.createOscillator).toHaveBeenCalledTimes(1);
+    const callsAfterWarmup = suspendedCtx.createOscillator.mock.calls.length;
 
     suspendedCtx.state = 'running';
     resolveResume();
     // Flush enough microtask hops to drain the resume().then().catch() chain.
     for (let i = 0; i < 5; i++) await Promise.resolve();
 
-    expect(suspendedCtx.createOscillator).toHaveBeenCalled();
+    expect(suspendedCtx.createOscillator.mock.calls.length).toBeGreaterThan(callsAfterWarmup);
+  });
+
+  it('playBackgroundMusic primes the audio pipeline with a zero-gain warmup oscillator inside the user gesture (Android fix)', () => {
+    // Android Chrome silently drops audio for oscillators created outside
+    // the originating user gesture. The warmup ensures the browser sees
+    // audio creation inside the gesture so the deferred music scheduling
+    // actually produces sound.
+    const suspendedCtx: any = {
+      ...makeMockAudioContext(),
+      state: 'suspended',
+      resume: vi.fn(() => new Promise(() => {})) // never resolves
+    };
+    vi.stubGlobal('AudioContext', vi.fn(() => suspendedCtx));
+
+    const am = new AudioManager({} as any);
+    am.playBackgroundMusic();
+
+    // Exactly one oscillator (the warmup) should have been created
+    // synchronously, even though resume() never resolves.
+    expect(suspendedCtx.createOscillator).toHaveBeenCalledTimes(1);
+    // First gain node belongs to the warmup and must be zero-gain so it
+    // doesn't actually emit sound.
+    const warmupGain = suspendedCtx.createGain.mock.results[0].value;
+    expect(warmupGain.gain.value).toBe(0);
   });
 
   it('stopBackgroundMusic ramps the master gain to zero so queued notes go silent', () => {
     const am = new AudioManager({} as any);
     am.playBackgroundMusic();
-    // The first createGain call is the bg master gain (created before any notes)
-    const masterGain = ctx.createGain.mock.results[0].value;
+    // First createGain call is the warmup oscillator's gain (zero-gain primer
+    // for Android). The bg master gain is the second createGain call,
+    // created at the start of createBackgroundMusic before any notes.
+    const masterGain = ctx.createGain.mock.results[1].value;
     am.stopBackgroundMusic();
     expect(masterGain.gain.cancelScheduledValues).toHaveBeenCalled();
     const rampCalls = masterGain.gain.linearRampToValueAtTime.mock.calls;

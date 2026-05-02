@@ -182,6 +182,15 @@ export class AudioManager {
 
     this.stopBackgroundMusic();
 
+    // Android Chrome will silently drop audio for oscillators created
+    // *outside* the originating user gesture, even if state has become
+    // 'running'. The deferred .then() below fires as a microtask after the
+    // gesture stack unwinds, which is past the gesture window. Priming the
+    // pipeline with a zero-gain oscillator synchronously here ensures the
+    // browser sees audio creation inside the gesture, after which the
+    // deferred music scheduling actually produces sound.
+    this.warmupAudioPipeline();
+
     // On Android (and any browser with a stricter autoplay policy) the
     // AudioContext starts suspended. Scheduling notes against its
     // not-yet-running currentTime makes them fire silently, so defer the
@@ -200,6 +209,22 @@ export class AudioManager {
     }
 
     this.createBackgroundMusic();
+  }
+
+  private warmupAudioPipeline(): void {
+    if (!this.audioContext) return;
+    try {
+      const osc = this.audioContext.createOscillator();
+      const g = this.audioContext.createGain();
+      g.gain.value = 0;
+      osc.connect(g);
+      g.connect(this.audioContext.destination);
+      const t = this.audioContext.currentTime;
+      osc.start(t);
+      osc.stop(t + 0.05);
+    } catch {
+      // ignore — warmup is best-effort
+    }
   }
 
   stopBackgroundMusic(): void {

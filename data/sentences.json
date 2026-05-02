@@ -16,17 +16,17 @@
     },
     {
       "id": 3,
-      "sentence": "我 去學校",
-      "correctChars": ["要"],
-      "wrongChars": ["不", "也", "還", "就", "才"],
-      "translation": "I want to go to school"
+      "sentence": "一星期有  ",
+      "correctChars": ["七", "天"],
+      "wrongChars": ["三", "十", "日", "百", "千"],
+      "translation": "There are seven days in a week"
     },
     {
       "id": 4,
-      "sentence": "上山找  ",
-      "correctChars": ["老", "虎"],
-      "wrongChars": ["松","鼠", "雞", "幾", "朋"],
-      "translation": "Find a tiger in the mountain"
+      "sentence": "我考  分",
+      "correctChars": ["一", "百"],
+      "wrongChars": ["學","有", "上", "歲", "朋"],
+      "translation": "I scored 100 on the test"
     }
   ]
 }
