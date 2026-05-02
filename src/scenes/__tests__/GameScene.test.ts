@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('phaser', async () => {
   const mock = await import('../../test-utils/phaserMock');
@@ -214,7 +214,7 @@ describe('GameScene', () => {
   it('end-screen and splash text are centered on the maze midpoint, not the canvas midpoint', async () => {
     const { scene, stub } = await buildGame({ autoStart: false });
     const splashCall = (stub.add.text as any).mock.calls.find(
-      (c: any[]) => typeof c[2] === 'string' && /Start/i.test(c[2])
+      (c: any[]) => typeof c[2] === 'string' && /Press Any Key to Start/i.test(c[2])
     );
     expect(splashCall![0]).toBe(BOARD_PIXEL_WIDTH / 2);
 
@@ -294,6 +294,104 @@ describe('GameScene', () => {
     const after = scoreboard.getStats();
     expect(after.won).toBe(before.won + 1);
     expect(after.points).toBeGreaterThanOrEqual(before.points + 100);
+  });
+
+  describe('input-mode-aware restart and splash', () => {
+    let originalMatchMedia: typeof window.matchMedia | undefined;
+
+    beforeEach(() => {
+      originalMatchMedia = window.matchMedia;
+    });
+
+    afterEach(() => {
+      if (originalMatchMedia) {
+        window.matchMedia = originalMatchMedia;
+      } else {
+        delete (window as any).matchMedia;
+      }
+    });
+
+    it('start splash text mentions both Tap and Press Any Key', async () => {
+      const { stub } = await buildGame({ autoStart: false });
+      const splashCall = (stub.add.text as any).mock.calls.find(
+        (c: any[]) => typeof c[2] === 'string' && /Press Any Key/i.test(c[2])
+      );
+      expect(splashCall).toBeDefined();
+      expect(splashCall![2]).toMatch(/Tap/i);
+    });
+
+    it('game-over restart text is interactive and triggers restart on tap', async () => {
+      const { scene } = await buildGame();
+      const pacman = (scene as any).pacman;
+      const ghosts = (scene as any).ghosts as any[];
+      const wrongGhost = ghosts.find(g => !g.getIsCorrect());
+      wrongGhost.x = pacman.x;
+      wrongGhost.y = pacman.y;
+      scene.update(0, 16);
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.GAME_OVER);
+
+      const restartText = (scene as any).gameOverRestartText;
+      expect(restartText.setInteractive).toHaveBeenCalled();
+
+      restartText._emit('pointerdown');
+      // Restart is async (loads level data); let microtasks flush.
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.PLAYING);
+    });
+
+    it('victory restart text is interactive and triggers restart on tap', async () => {
+      const { scene } = await buildGame();
+      const pacman = (scene as any).pacman;
+      const ghosts = (scene as any).ghosts as any[];
+      for (const g of ghosts.filter(g => g.getIsCorrect())) {
+        g.x = pacman.x;
+        g.y = pacman.y;
+        scene.update(0, 16);
+      }
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.VICTORY);
+
+      const restartText = (scene as any).victoryRestartText;
+      expect(restartText.setInteractive).toHaveBeenCalled();
+
+      restartText._emit('pointerdown');
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.PLAYING);
+    });
+
+    it('restart hint says "Press SPACE" in keyboard mode', async () => {
+      const { scene } = await buildGame();
+      const pacman = (scene as any).pacman;
+      const ghosts = (scene as any).ghosts as any[];
+      const wrongGhost = ghosts.find(g => !g.getIsCorrect());
+      wrongGhost.x = pacman.x;
+      wrongGhost.y = pacman.y;
+      scene.update(0, 16);
+      const restartText = (scene as any).gameOverRestartText;
+      expect(restartText.text).toMatch(/SPACE/);
+    });
+
+    it('restart hint says "Tap" in touch mode', async () => {
+      window.matchMedia = vi.fn((q: string) => ({
+        matches: q === '(pointer: coarse)',
+        media: q,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false
+      })) as any;
+      const { scene } = await buildGame();
+      const pacman = (scene as any).pacman;
+      const ghosts = (scene as any).ghosts as any[];
+      const wrongGhost = ghosts.find(g => !g.getIsCorrect());
+      wrongGhost.x = pacman.x;
+      wrongGhost.y = pacman.y;
+      scene.update(0, 16);
+      const restartText = (scene as any).gameOverRestartText;
+      expect(restartText.text).toMatch(/Tap/i);
+      expect(restartText.text).not.toMatch(/SPACE/);
+    });
   });
 
   it('victory text is given a high depth so the maze cannot cover it', async () => {

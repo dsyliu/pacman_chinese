@@ -84,4 +84,45 @@ describe('ScoreboardManager', () => {
     const updatedLabels = updated.map((t: any) => t.text);
     expect(updatedLabels).toContain('42');
   });
+
+  it('render in keyboard mode shows arrow-key controls and a SPACE Restart hint', () => {
+    const scene = createSceneStub();
+    const mgr = new ScoreboardManager(scene);
+    mgr.render(896, 256, 'keyboard');
+
+    const texts = lastTexts(scene);
+    const labels = texts.map((t: any) => t.text);
+    expect(labels).toContain('HOW TO PLAY');
+    expect(labels).toContain('CONTROLS');
+    expect(labels.some((t: string) => /SPACE/.test(t) && /Restart/.test(t))).toBe(true);
+    expect(labels.some((t: string) => /Move Up/.test(t) && /Move Down/.test(t))).toBe(true);
+    expect(labels.some((t: string) => /Move Left/.test(t) && /Move Right/.test(t))).toBe(true);
+    expect(labels.every((t: string) => !/Swipe/i.test(t))).toBe(true);
+    expect(labels.some((t: string) => /correct/i.test(t) && /blanks/i.test(t))).toBe(true);
+  });
+
+  it('render in touch mode shows Swipe-to-move and a Tap RESTART hint instead of arrow keys', () => {
+    const scene = createSceneStub();
+    const mgr = new ScoreboardManager(scene);
+    mgr.render(896, 256, 'touch');
+
+    const texts = lastTexts(scene);
+    const labels = texts.map((t: any) => t.text);
+    expect(labels).toContain('HOW TO PLAY');
+    expect(labels).toContain('CONTROLS');
+    expect(labels.some((t: string) => /Swipe/i.test(t) && /move/i.test(t))).toBe(true);
+    expect(labels.some((t: string) => /Tap/i.test(t) && /restart/i.test(t))).toBe(true);
+    // Touch mode should NOT advertise keyboard-only affordances.
+    expect(labels.every((t: string) => !/SPACE/.test(t))).toBe(true);
+    expect(labels.every((t: string) => !/Move Up/.test(t))).toBe(true);
+  });
+
+  it('render defaults to keyboard mode when input mode is omitted', () => {
+    const scene = createSceneStub();
+    const mgr = new ScoreboardManager(scene);
+    mgr.render(896, 256);
+
+    const labels = lastTexts(scene).map((t: any) => t.text);
+    expect(labels.some((t: string) => /SPACE/.test(t) && /Restart/.test(t))).toBe(true);
+  });
 });

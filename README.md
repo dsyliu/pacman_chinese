@@ -73,7 +73,7 @@ npm run preview
 ## Game Controls
 
 - **Click** or **Any Key** - Dismiss the start splash and begin play (also unlocks browser audio)
-- **Arrow Keys** or **WASD** - Move Pacman
+- **Arrow Keys** - Move Pacman (↑ up, ↓ down, ← left, → right)
 - **Spacebar** - Restart game (after game over or victory)
 
 ## Gameplay

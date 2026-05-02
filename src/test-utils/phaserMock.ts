@@ -77,6 +77,7 @@ export function createGraphicsStub() {
 }
 
 export function createTextStub(text: string = '') {
+  const listeners: Record<string, Array<(...args: any[]) => void>> = {};
   const stub: any = {
     text,
     visible: true,
@@ -85,10 +86,18 @@ export function createTextStub(text: string = '') {
     setVisible: vi.fn().mockReturnThis(),
     setDepth: vi.fn().mockReturnThis(),
     setScrollFactor: vi.fn().mockReturnThis(),
+    setInteractive: vi.fn().mockReturnThis(),
     setText: vi.fn(function (this: any, t: string) {
       this.text = t;
       return this;
     }),
+    on: vi.fn(function (this: any, evt: string, fn: (...args: any[]) => void) {
+      (listeners[evt] ||= []).push(fn);
+      return this;
+    }),
+    _emit(evt: string, ...args: any[]) {
+      (listeners[evt] || []).forEach(fn => fn(...args));
+    },
     destroy: vi.fn()
   };
   return stub;
@@ -110,8 +119,8 @@ export function createCursorKeys(): any {
 }
 
 export function createSceneStub() {
-  const wasdKeys = { W: createKey(), A: createKey(), S: createKey(), D: createKey() };
   const keyboardListeners: Record<string, Array<(...args: any[]) => void>> = {};
+  const inputListeners: Record<string, Array<(...args: any[]) => void>> = {};
   const cursorKeys = createCursorKeys();
   const scene: any = {
     add: {
@@ -126,7 +135,6 @@ export function createSceneStub() {
       keyboard: {
         enabled: true,
         createCursorKeys: vi.fn(() => cursorKeys),
-        addKeys: vi.fn((_keys: string) => wasdKeys),
         on: vi.fn((evt: string, fn: (...args: any[]) => void) => {
           (keyboardListeners[evt] ||= []).push(fn);
         }),
@@ -134,13 +142,19 @@ export function createSceneStub() {
           (keyboardListeners[evt] ||= []).push(fn);
         })
       },
-      on: vi.fn(),
-      once: vi.fn()
+      on: vi.fn((evt: string, fn: (...args: any[]) => void) => {
+        (inputListeners[evt] ||= []).push(fn);
+      }),
+      once: vi.fn((evt: string, fn: (...args: any[]) => void) => {
+        (inputListeners[evt] ||= []).push(fn);
+      })
     },
-    _wasdKeys: wasdKeys,
     _cursorKeys: cursorKeys,
     _emit(event: string, ...args: any[]) {
       (keyboardListeners[event] || []).forEach(fn => fn(...args));
+    },
+    _emitInput(event: string, ...args: any[]) {
+      (inputListeners[event] || []).forEach(fn => fn(...args));
     }
   };
   return scene;

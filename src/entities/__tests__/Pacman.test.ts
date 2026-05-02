@@ -52,14 +52,6 @@ describe('Pacman', () => {
     expect(pacman.currentDirection.x).toBe(-1);
   });
 
-  it('treats WASD keys equivalently to arrow keys', () => {
-    const { scene, pacman } = spawn();
-    const x0 = pacman.x;
-    scene._wasdKeys.D.isDown = true;
-    pacman.update(0, 100);
-    expect(pacman.x).toBeGreaterThan(x0);
-  });
-
   it('stops at the next tile center when running into a wall', () => {
     const { scene, pacman, maze } = spawn(13, 24);
     scene._cursorKeys.up.isDown = true;
@@ -97,5 +89,68 @@ describe('Pacman', () => {
     scene._cursorKeys.right.isDown = true;
     for (let i = 0; i < 5; i++) pacman.update(0, 16);
     expect((pacman as any).mouthAngle).toBeGreaterThan(0);
+  });
+
+  describe('swipe input', () => {
+    it('queues a right move on a horizontal swipe right', () => {
+      const { scene, pacman } = spawn(13, 24);
+      const x0 = pacman.x;
+      scene._emitInput('pointerdown', { x: 100, y: 100 });
+      scene._emitInput('pointerup', { x: 200, y: 105 });
+      pacman.update(0, 100);
+      expect(pacman.x).toBeGreaterThan(x0);
+      expect(pacman.currentDirection.x).toBe(1);
+    });
+
+    it('queues a left move on a horizontal swipe left', () => {
+      const { scene, pacman } = spawn(13, 24);
+      const x0 = pacman.x;
+      scene._emitInput('pointerdown', { x: 200, y: 100 });
+      scene._emitInput('pointerup', { x: 50, y: 90 });
+      pacman.update(0, 100);
+      expect(pacman.x).toBeLessThan(x0);
+      expect(pacman.currentDirection.x).toBe(-1);
+    });
+
+    it('queues a down move on a vertical swipe down', () => {
+      const { scene, pacman } = spawn(6, 9);
+      const y0 = pacman.y;
+      scene._emitInput('pointerdown', { x: 100, y: 100 });
+      scene._emitInput('pointerup', { x: 105, y: 200 });
+      pacman.update(0, 100);
+      expect(pacman.y).toBeGreaterThan(y0);
+      expect(pacman.currentDirection.y).toBe(1);
+    });
+
+    it('queues an up move on a vertical swipe up', () => {
+      const { scene, pacman } = spawn(6, 9);
+      const y0 = pacman.y;
+      scene._emitInput('pointerdown', { x: 100, y: 200 });
+      scene._emitInput('pointerup', { x: 90, y: 100 });
+      pacman.update(0, 100);
+      expect(pacman.y).toBeLessThan(y0);
+      expect(pacman.currentDirection.y).toBe(-1);
+    });
+
+    it('ignores small movements below the swipe threshold (taps)', () => {
+      const { scene, pacman } = spawn(13, 24);
+      const x0 = pacman.x;
+      const y0 = pacman.y;
+      scene._emitInput('pointerdown', { x: 100, y: 100 });
+      scene._emitInput('pointerup', { x: 110, y: 105 });
+      pacman.update(0, 100);
+      expect(pacman.x).toBe(x0);
+      expect(pacman.y).toBe(y0);
+    });
+
+    it('picks the dominant axis on diagonal swipes', () => {
+      const { scene, pacman } = spawn(13, 24);
+      scene._emitInput('pointerdown', { x: 100, y: 100 });
+      // dx=120 dominates dy=40 → horizontal
+      scene._emitInput('pointerup', { x: 220, y: 140 });
+      pacman.update(0, 100);
+      expect(pacman.currentDirection.x).toBe(1);
+      expect(pacman.currentDirection.y).toBe(0);
+    });
   });
 });

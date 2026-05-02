@@ -7,6 +7,8 @@ import { GameStateManager } from '../managers/GameState';
 import { DataLoader } from '../managers/DataLoader';
 import { AudioManager } from '../managers/AudioManager';
 import { ScoreboardManager } from '../managers/ScoreboardManager';
+import { detectInputMode } from '../utils/input';
+import type { InputMode } from '../utils/input';
 import { GameState } from '../utils/types';
 import type { LevelData } from '../utils/types';
 
@@ -30,6 +32,7 @@ export class GameScene extends Phaser.Scene {
   private victoryRestartText: Phaser.GameObjects.Text | null = null;
   private startSplashText: Phaser.GameObjects.Text | null = null;
   private spaceRestartBound: boolean = false;
+  private inputMode: InputMode = 'keyboard';
 
   constructor() {
     super({ key: 'GameScene' });
@@ -70,9 +73,10 @@ export class GameScene extends Phaser.Scene {
     this.sentenceManager.initialize(this.levelData);
     this.gameStateManager.initializeLevel(this.levelData.correctChars.length);
 
+    this.inputMode = detectInputMode();
     const panelX = BOARD_PIXEL_WIDTH;
     const panelWidth = this.cameras.main.width - BOARD_PIXEL_WIDTH;
-    this.scoreboardManager.render(panelX, panelWidth);
+    this.scoreboardManager.render(panelX, panelWidth, this.inputMode);
 
     // Hold the game in MENU until the user dismisses the start splash;
     // this also satisfies the browser autoplay policy on the same gesture.
@@ -83,7 +87,7 @@ export class GameScene extends Phaser.Scene {
 
   private showStartSplash(): void {
     const h = this.cameras.main.height;
-    this.startSplashText = this.add.text(BOARD_PIXEL_WIDTH / 2, h / 2, 'Click or Press Any Key to Start', {
+    this.startSplashText = this.add.text(BOARD_PIXEL_WIDTH / 2, h / 2, 'Tap or Press Any Key to Start', {
       fontSize: '40px',
       color: '#FFFF00',
       fontFamily: 'Arial, sans-serif'
@@ -243,7 +247,7 @@ export class GameScene extends Phaser.Scene {
       this.gameOverRestartText = this.add.text(
         centerX,
         screenHeight / 2 + 50,
-        'Press Space to Restart',
+        this.restartHintText(),
         {
           fontSize: '32px',
           color: '#FF0000',
@@ -252,6 +256,7 @@ export class GameScene extends Phaser.Scene {
       );
       this.gameOverRestartText.setOrigin(0.5, 0.5);
       this.gameOverRestartText.setDepth(1000);
+      this.makeRestartButton(this.gameOverRestartText);
     } else {
       this.gameOverText.setVisible(true);
       if (this.gameOverRestartText) {
@@ -286,7 +291,7 @@ export class GameScene extends Phaser.Scene {
       this.victoryRestartText = this.add.text(
         centerX,
         screenHeight / 2 + 50,
-        'Press SPACE to Restart',
+        this.restartHintText(),
         {
           fontSize: '32px',
           color: '#00FF00',
@@ -295,12 +300,24 @@ export class GameScene extends Phaser.Scene {
       );
       this.victoryRestartText.setOrigin(0.5, 0.5);
       this.victoryRestartText.setDepth(1000);
+      this.makeRestartButton(this.victoryRestartText);
     } else {
       this.victoryText.setVisible(true);
       if (this.victoryRestartText) {
         this.victoryRestartText.setVisible(true);
       }
     }
+  }
+
+  private restartHintText(): string {
+    return this.inputMode === 'touch' ? 'Tap to Restart' : 'Press SPACE to Restart';
+  }
+
+  private makeRestartButton(text: Phaser.GameObjects.Text): void {
+    text.setInteractive({ useHandCursor: true });
+    text.on('pointerdown', () => {
+      this.restart();
+    });
   }
 
   private async restart(): Promise<void> {

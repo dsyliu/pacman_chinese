@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import type { InputMode } from '../utils/input';
 
 const STORAGE_KEY = 'pacman_chinese.scoreboard.v1';
 const WIN_BONUS = 100;
@@ -92,7 +93,7 @@ export class ScoreboardManager {
     this.refresh();
   }
 
-  render(panelX: number, panelWidth: number): void {
+  render(panelX: number, panelWidth: number, inputMode: InputMode = 'keyboard'): void {
     const centerX = panelX + panelWidth / 2;
 
     this.addStatic(centerX, 60, 'SCORE', 30, '#FFD24A');
@@ -108,6 +109,35 @@ export class ScoreboardManager {
 
     this.addStatic(centerX, 570, 'Lost', 22, '#FF5555');
     this.lostValueText = this.addStatic(centerX, 610, '0', 36, '#FF5555');
+
+    this.addStatic(centerX, 680, 'HOW TO PLAY', 22, '#FFFFFF');
+    this.addStatic(
+      centerX,
+      750,
+      'Eat the correct\ncharacters to fill\nthe blanks. Avoid\nthe wrong ones!',
+      16,
+      '#BBBBBB'
+    );
+
+    this.addStatic(centerX, 830, 'CONTROLS', 22, '#FFFFFF');
+
+    if (inputMode === 'touch') {
+      this.addStatic(
+        centerX,
+        900,
+        'Swipe to move\n(up / down / left / right)\n\nTap RESTART\nto play again',
+        16,
+        '#BBBBBB'
+      );
+    } else {
+      this.addStatic(
+        centerX,
+        910,
+        '↑  Move Up\n↓  Move Down\n←  Move Left\n→  Move Right\nSPACE  Restart',
+        16,
+        '#BBBBBB'
+      );
+    }
 
     this.refresh();
   }
@@ -126,7 +156,8 @@ export class ScoreboardManager {
     const t = this.scene.add.text(x, y, text, {
       fontSize: `${fontSize}px`,
       fontFamily: 'Arial, sans-serif',
-      color
+      color,
+      align: 'center'
     });
     t.setOrigin(0.5, 0.5);
     return t;

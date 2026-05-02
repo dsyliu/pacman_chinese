@@ -10,7 +10,6 @@ export class Pacman extends Phaser.GameObjects.Container {
   public currentDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
   private queuedDirection: Phaser.Math.Vector2 = new Phaser.Math.Vector2(0, 0);
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
-  private wasdKeys: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   private radius: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number, maze: Maze) {
@@ -21,17 +20,10 @@ export class Pacman extends Phaser.GameObjects.Container {
     this.graphics = scene.add.graphics();
     this.add(this.graphics);
 
+    this.installSwipeInput(scene);
+
     if (scene.input.keyboard) {
       this.cursors = scene.input.keyboard.createCursorKeys();
-      const wasd = scene.input.keyboard.addKeys('W,S,A,D') as any;
-      this.wasdKeys = {
-        up: wasd.W,
-        down: wasd.S,
-        left: wasd.A,
-        right: wasd.D,
-        space: wasd.W,
-        shift: wasd.W
-      } as Phaser.Types.Input.Keyboard.CursorKeys;
     } else {
       this.cursors = {
         left: { isDown: false },
@@ -46,10 +38,10 @@ export class Pacman extends Phaser.GameObjects.Container {
   }
 
   update(_time: number, delta: number): void {
-    const left = this.cursors.left.isDown || !!(this.wasdKeys && this.wasdKeys.left.isDown);
-    const right = this.cursors.right.isDown || !!(this.wasdKeys && this.wasdKeys.right.isDown);
-    const up = this.cursors.up.isDown || !!(this.wasdKeys && this.wasdKeys.up.isDown);
-    const down = this.cursors.down.isDown || !!(this.wasdKeys && this.wasdKeys.down.isDown);
+    const left = this.cursors.left.isDown;
+    const right = this.cursors.right.isDown;
+    const up = this.cursors.up.isDown;
+    const down = this.cursors.down.isDown;
 
     if (left) this.queuedDirection.set(-1, 0);
     else if (right) this.queuedDirection.set(1, 0);
@@ -149,6 +141,28 @@ export class Pacman extends Phaser.GameObjects.Container {
     this.graphics.arc(cx, cy, radius, startAngle, endAngle);
     this.graphics.closePath();
     this.graphics.fillPath();
+  }
+
+  private installSwipeInput(scene: Phaser.Scene): void {
+    const SWIPE_THRESHOLD = 30;
+    let touchStart: { x: number; y: number } | null = null;
+
+    scene.input.on('pointerdown', (pointer: { x: number; y: number }) => {
+      touchStart = { x: pointer.x, y: pointer.y };
+    });
+
+    scene.input.on('pointerup', (pointer: { x: number; y: number }) => {
+      if (!touchStart) return;
+      const dx = pointer.x - touchStart.x;
+      const dy = pointer.y - touchStart.y;
+      touchStart = null;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_THRESHOLD) return;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        this.queuedDirection.set(dx > 0 ? 1 : -1, 0);
+      } else {
+        this.queuedDirection.set(0, dy > 0 ? 1 : -1);
+      }
+    });
   }
 
   getGridX(): number {
