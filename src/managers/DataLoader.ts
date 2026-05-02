@@ -9,7 +9,7 @@ export class DataLoader {
     }
 
     try {
-      const response = await fetch('/data/sentences.json');
+      const response = await fetch(`${import.meta.env.BASE_URL}data/sentences.json`);
       if (!response.ok) {
         throw new Error(`Failed to load data: ${response.statusText}`);
       }
