@@ -33,9 +33,17 @@ async function buildGame(opts: { autoStart?: boolean; portrait?: boolean } = {})
   vi.spyOn(DataLoader, 'loadData').mockResolvedValue({ levels: [sampleLevel] });
   vi.stubGlobal('AudioContext', vi.fn(() => ({
     currentTime: 0,
+    sampleRate: 44100,
     destination: {},
     createOscillator: () => ({ type: '', frequency: { value: 0 }, connect: () => {}, start: () => {}, stop: () => {} }),
-    createGain: () => ({ gain: { value: 1, setValueAtTime: () => {}, linearRampToValueAtTime: () => {}, exponentialRampToValueAtTime: () => {}, cancelScheduledValues: () => {} }, connect: () => {} })
+    createGain: () => ({ gain: { value: 1, setValueAtTime: () => {}, linearRampToValueAtTime: () => {}, exponentialRampToValueAtTime: () => {}, cancelScheduledValues: () => {} }, connect: () => {} }),
+    createBuffer: (channels: number, samples: number, rate: number) => ({
+      numberOfChannels: channels,
+      length: samples,
+      sampleRate: rate,
+      getChannelData: () => new Float32Array(samples)
+    }),
+    createBufferSource: () => ({ buffer: null, loop: false, connect: () => {}, disconnect: () => {}, start: () => {}, stop: () => {} })
   })));
   const scene = new GameScene();
   const stub = attachSceneStubs(scene);

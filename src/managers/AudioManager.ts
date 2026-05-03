@@ -3,9 +3,9 @@ import Phaser from 'phaser';
 export class AudioManager {
   private isMuted: boolean = false;
   private audioContext: AudioContext | null = null;
-  private backgroundMusicInterval: number | null = null;
-  private nextPatternTime: number = 0;
   private bgMasterGain: GainNode | null = null;
+  private bgBuffer: AudioBuffer | null = null;
+  private bgSource: AudioBufferSourceNode | null = null;
 
   constructor(_scene: Phaser.Scene) {
     this.initializeAudio();
@@ -55,37 +55,14 @@ export class AudioManager {
     }
   }
 
-  private playNote(
-    frequency: number,
-    startTime: number,
-    duration: number,
-    gain: number = 0.08,
-    type: OscillatorType = 'square',
-    destination?: AudioNode
-  ): void {
-    if (!this.audioContext) return;
-    const osc = this.audioContext.createOscillator();
-    const g = this.audioContext.createGain();
-    osc.connect(g);
-    g.connect(destination ?? this.audioContext.destination);
-    osc.type = type;
-    osc.frequency.value = frequency;
-    g.gain.setValueAtTime(0, startTime);
-    g.gain.linearRampToValueAtTime(gain, startTime + 0.004);
-    g.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-    osc.start(startTime);
-    osc.stop(startTime + duration + 0.02);
-  }
+  private buildBackgroundBuffer(): AudioBuffer | null {
+    if (!this.audioContext) return null;
 
-  private createBackgroundMusic(initialOffset: number = 0.05): void {
-    if (!this.audioContext) return;
-
-    // Master gain for instant cutoff on stopBackgroundMusic
-    this.bgMasterGain = this.audioContext.createGain();
-    this.bgMasterGain.gain.setValueAtTime(1, this.audioContext.currentTime);
-    this.bgMasterGain.connect(this.audioContext.destination);
-
-    // 16-note upbeat I-vi-IV-V arpeggio loop (~1.6 s)
+    // 16-note upbeat I-vi-IV-V arpeggio (~1.6 s) pre-rendered into an
+    // AudioBuffer so that playBackgroundMusic only needs to create one
+    // AudioBufferSourceNode (not 16 oscillators per loop). Looping is
+    // handled natively by the source's `loop = true`, which avoids the
+    // out-of-gesture setInterval scheduling that Android Chrome silences.
     const melody = [
       // I  (C):  C  E  G  C5
       261.63, 329.63, 392.00, 523.25,
@@ -96,27 +73,40 @@ export class AudioManager {
       // V  (G):  G  B  D5 G5
       392.00, 493.88, 587.33, 783.99
     ];
+    const noteSlot = 0.10;
+    const playFraction = 0.85;
+    const fadeIn = 0.004;
+    const peakGain = 0.08;
+    const sampleRate = this.audioContext.sampleRate;
+    const samplesPerSlot = Math.max(1, Math.floor(noteSlot * sampleRate));
+    const playSamples = Math.floor(noteSlot * playFraction * sampleRate);
+    const fadeInSamples = Math.max(1, Math.floor(fadeIn * sampleRate));
+    const totalSamples = melody.length * samplesPerSlot;
 
-    const noteDuration = 0.10;
-    const patternDuration = melody.length * noteDuration;
+    const buffer = this.audioContext.createBuffer(1, totalSamples, sampleRate);
+    const data = buffer.getChannelData(0);
 
-    const schedulePattern = (startTime: number) => {
-      melody.forEach((freq, i) => {
-        this.playNote(freq, startTime + i * noteDuration, noteDuration * 0.85, 0.08, 'square', this.bgMasterGain!);
-      });
-    };
-
-    this.nextPatternTime = this.audioContext.currentTime + initialOffset;
-    schedulePattern(this.nextPatternTime);
-    this.nextPatternTime += patternDuration;
-
-    this.backgroundMusicInterval = window.setInterval(() => {
-      if (this.isMuted || !this.audioContext) return;
-      if (this.nextPatternTime - this.audioContext.currentTime < 0.4) {
-        schedulePattern(this.nextPatternTime);
-        this.nextPatternTime += patternDuration;
+    for (let n = 0; n < melody.length; n++) {
+      const freq = melody[n];
+      const noteStart = n * samplesPerSlot;
+      const period = sampleRate / freq;
+      for (let i = 0; i < samplesPerSlot; i++) {
+        if (i >= playSamples) break;
+        // Square wave from sample-aligned phase to avoid drift between notes.
+        const square = (i % period) < period / 2 ? 1 : -1;
+        let env: number;
+        if (i < fadeInSamples) {
+          env = peakGain * (i / fadeInSamples);
+        } else {
+          // Exponential decay from peakGain to ~0.001 over the rest of the
+          // play window — same shape the oscillator path used.
+          const decayProgress = (i - fadeInSamples) / Math.max(1, playSamples - fadeInSamples);
+          env = peakGain * Math.pow(0.001 / peakGain, decayProgress);
+        }
+        data[noteStart + i] = square * env;
       }
-    }, 200);
+    }
+    return buffer;
   }
 
   private createVictoryMusic(): void {
@@ -182,29 +172,34 @@ export class AudioManager {
 
     this.stopBackgroundMusic();
 
-    // Android Chrome (strict autoplay) silently drops audio for oscillators
-    // created OUTSIDE the originating user gesture, even when state has
-    // transitioned to 'running'. A previous attempt deferred scheduling to
-    // a resume().then() microtask, but that runs after the gesture stack
-    // unwinds — which is exactly the case Android punishes. So here we
-    // schedule everything synchronously, in-gesture: warmup, resume, and
-    // the first pattern of music notes.
+    // Android Chrome (strict autoplay) silently drops audio for nodes
+    // created OUTSIDE the originating user gesture. The earlier oscillator
+    // path also relied on a setInterval to schedule subsequent patterns —
+    // those runs are out-of-gesture and got silenced. Use a single
+    // AudioBufferSourceNode with loop=true: one node, started in-gesture,
+    // loops forever in the audio thread. No deferred scheduling.
     this.warmupAudioPipeline();
 
-    const wasSuspended = this.audioContext.state === 'suspended';
-    if (wasSuspended && typeof this.audioContext.resume === 'function') {
+    if (this.audioContext.state === 'suspended' && typeof this.audioContext.resume === 'function') {
       this.audioContext.resume().catch(() => {
         // ignore — a later gesture will retry
       });
     }
 
-    // When state was 'suspended' on entry, currentTime is frozen at its
-    // suspension point. Per the Web Audio spec, oscillators scheduled while
-    // suspended stay queued and play once the context resumes — but to
-    // absorb resume() latency we push the first note 0.3s into the future.
-    // When already running, a tight 0.05s offset gives near-immediate start.
-    const initialOffset = wasSuspended ? 0.3 : 0.05;
-    this.createBackgroundMusic(initialOffset);
+    if (!this.bgBuffer) {
+      this.bgBuffer = this.buildBackgroundBuffer();
+    }
+    if (!this.bgBuffer) return;
+
+    this.bgMasterGain = this.audioContext.createGain();
+    this.bgMasterGain.gain.setValueAtTime(1, this.audioContext.currentTime);
+    this.bgMasterGain.connect(this.audioContext.destination);
+
+    this.bgSource = this.audioContext.createBufferSource();
+    this.bgSource.buffer = this.bgBuffer;
+    this.bgSource.loop = true;
+    this.bgSource.connect(this.bgMasterGain);
+    this.bgSource.start();
   }
 
   private warmupAudioPipeline(): void {
@@ -224,9 +219,10 @@ export class AudioManager {
   }
 
   stopBackgroundMusic(): void {
-    if (this.backgroundMusicInterval) {
-      clearInterval(this.backgroundMusicInterval);
-      this.backgroundMusicInterval = null;
+    if (this.bgSource) {
+      try { this.bgSource.stop(); } catch { /* already stopped */ }
+      try { this.bgSource.disconnect(); } catch { /* already disconnected */ }
+      this.bgSource = null;
     }
     if (this.audioContext && this.bgMasterGain) {
       const now = this.audioContext.currentTime;
