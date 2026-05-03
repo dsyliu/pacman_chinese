@@ -1,14 +1,55 @@
 import Phaser from 'phaser';
 
+interface AudioDebugInfo {
+  resumeAttempts: number;
+  suspendedAtPlayCount: number;
+  startCalls: number;
+  stopCalls: number;
+  warmupCalls: number;
+  bufferBuilt: boolean;
+  lastResumeError: string;
+}
+
+export interface AudioDebugSnapshot extends AudioDebugInfo {
+  state: string;
+  currentTime: number;
+  isMuted: boolean;
+}
+
 export class AudioManager {
   private isMuted: boolean = false;
   private audioContext: AudioContext | null = null;
   private bgMasterGain: GainNode | null = null;
   private bgBuffer: AudioBuffer | null = null;
   private bgSource: AudioBufferSourceNode | null = null;
+  private debugInfo: AudioDebugInfo = {
+    resumeAttempts: 0,
+    suspendedAtPlayCount: 0,
+    startCalls: 0,
+    stopCalls: 0,
+    warmupCalls: 0,
+    bufferBuilt: false,
+    lastResumeError: ''
+  };
 
   constructor(_scene: Phaser.Scene) {
     this.initializeAudio();
+    // Pre-build the music buffer at construction so playBackgroundMusic
+    // does no synthesis inside the user gesture — only node creation +
+    // start(), keeping the in-gesture work as small as possible.
+    if (this.audioContext) {
+      this.bgBuffer = this.buildBackgroundBuffer();
+      this.debugInfo.bufferBuilt = this.bgBuffer !== null;
+    }
+  }
+
+  getDebugSnapshot(): AudioDebugSnapshot {
+    return {
+      state: this.audioContext?.state ?? 'no-ctx',
+      currentTime: this.audioContext?.currentTime ?? 0,
+      isMuted: this.isMuted,
+      ...this.debugInfo
+    };
   }
 
   private initializeAudio(): void {
@@ -172,22 +213,21 @@ export class AudioManager {
 
     this.stopBackgroundMusic();
 
-    // Android Chrome (strict autoplay) silently drops audio for nodes
-    // created OUTSIDE the originating user gesture. The earlier oscillator
-    // path also relied on a setInterval to schedule subsequent patterns —
-    // those runs are out-of-gesture and got silenced. Use a single
-    // AudioBufferSourceNode with loop=true: one node, started in-gesture,
-    // loops forever in the audio thread. No deferred scheduling.
     this.warmupAudioPipeline();
 
-    if (this.audioContext.state === 'suspended' && typeof this.audioContext.resume === 'function') {
-      this.audioContext.resume().catch(() => {
-        // ignore — a later gesture will retry
-      });
+    if (this.audioContext.state === 'suspended') {
+      this.debugInfo.suspendedAtPlayCount++;
+      if (typeof this.audioContext.resume === 'function') {
+        this.debugInfo.resumeAttempts++;
+        this.audioContext.resume().catch((err) => {
+          this.debugInfo.lastResumeError = String(err);
+        });
+      }
     }
 
     if (!this.bgBuffer) {
       this.bgBuffer = this.buildBackgroundBuffer();
+      this.debugInfo.bufferBuilt = this.bgBuffer !== null;
     }
     if (!this.bgBuffer) return;
 
@@ -200,6 +240,7 @@ export class AudioManager {
     this.bgSource.loop = true;
     this.bgSource.connect(this.bgMasterGain);
     this.bgSource.start();
+    this.debugInfo.startCalls++;
   }
 
   private warmupAudioPipeline(): void {
@@ -213,6 +254,7 @@ export class AudioManager {
       const t = this.audioContext.currentTime;
       osc.start(t);
       osc.stop(t + 0.05);
+      this.debugInfo.warmupCalls++;
     } catch {
       // ignore — warmup is best-effort
     }
@@ -223,6 +265,7 @@ export class AudioManager {
       try { this.bgSource.stop(); } catch { /* already stopped */ }
       try { this.bgSource.disconnect(); } catch { /* already disconnected */ }
       this.bgSource = null;
+      this.debugInfo.stopCalls++;
     }
     if (this.audioContext && this.bgMasterGain) {
       const now = this.audioContext.currentTime;

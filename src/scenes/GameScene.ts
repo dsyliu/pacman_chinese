@@ -35,6 +35,7 @@ export class GameScene extends Phaser.Scene {
   private spaceRestartBound: boolean = false;
   private tapRestartBound: boolean = false;
   private inputMode: InputMode = 'keyboard';
+  private audioDebugText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -98,6 +99,32 @@ export class GameScene extends Phaser.Scene {
     this.gameStateManager.setState(GameState.MENU);
 
     this.showStartSplash();
+    this.maybeRenderAudioDebug();
+  }
+
+  private maybeRenderAudioDebug(): void {
+    if (typeof window === 'undefined') return;
+    if (!window.location?.search?.includes('debug=1')) return;
+    this.audioDebugText = this.add.text(8, 8, 'audio: -', {
+      fontSize: '14px',
+      color: '#00FF88',
+      backgroundColor: '#000000',
+      padding: { x: 6, y: 4 },
+      fontFamily: 'monospace'
+    });
+    this.audioDebugText.setDepth(3000);
+  }
+
+  private updateAudioDebug(): void {
+    if (!this.audioDebugText || !this.audioManager) return;
+    const s = this.audioManager.getDebugSnapshot();
+    this.audioDebugText.setText(
+      `state:${s.state} t:${s.currentTime.toFixed(2)} muted:${s.isMuted}\n` +
+      `resume:${s.resumeAttempts} susp@play:${s.suspendedAtPlayCount}\n` +
+      `start:${s.startCalls} stop:${s.stopCalls} warmup:${s.warmupCalls}\n` +
+      `buf:${s.bufferBuilt}` +
+      (s.lastResumeError ? `\nerr:${s.lastResumeError}` : '')
+    );
   }
 
   private showStartSplash(): void {
@@ -183,6 +210,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    this.updateAudioDebug();
     if (this.gameStateManager.getState() !== GameState.PLAYING) {
       return;
     }
