@@ -121,16 +121,31 @@ export class Maze {
   private dotGrid: boolean[][];
   private graphics: Phaser.GameObjects.Graphics;
   private dotGraphics: Phaser.GameObjects.Graphics;
+  private offsetX: number;
+  private offsetY: number;
 
-  constructor(scene: Phaser.Scene, layoutIndex: number = 0) {
+  constructor(
+    scene: Phaser.Scene,
+    layoutIndex: number = 0,
+    offset: { x: number; y: number } = { x: 0, y: 0 }
+  ) {
     const layout = LAYOUTS[layoutIndex] ?? LAYOUTS[0];
     this.grid = layout.map(row => row.split('').map(ch => ch === '#'));
     this.dotGrid = [];
     for (let r = 0; r < Maze.ROWS; r++) {
       this.dotGrid[r] = new Array(Maze.COLS).fill(false);
     }
+    this.offsetX = offset.x;
+    this.offsetY = offset.y;
+    // Position the Graphics layers at the maze offset so the existing
+    // (col * TILE_SIZE) draw math renders at the shifted position. World
+    // coordinates returned by tileToWorld include the offset so entities
+    // (Pacman, Ghosts) — which are NOT children of these Graphics — line
+    // up correctly with the rendered walls and dots.
     this.graphics = scene.add.graphics();
+    this.graphics.setPosition(this.offsetX, this.offsetY);
     this.dotGraphics = scene.add.graphics();
+    this.dotGraphics.setPosition(this.offsetX, this.offsetY);
     this.render();
   }
 
@@ -169,16 +184,20 @@ export class Maze {
 
   tileToWorld(col: number, row: number): { x: number; y: number } {
     return {
-      x: col * TILE_SIZE + TILE_SIZE / 2,
-      y: row * TILE_SIZE + TILE_SIZE / 2
+      x: this.offsetX + col * TILE_SIZE + TILE_SIZE / 2,
+      y: this.offsetY + row * TILE_SIZE + TILE_SIZE / 2
     };
   }
 
   worldToTile(x: number, y: number): { col: number; row: number } {
     return {
-      col: Math.floor(x / TILE_SIZE),
-      row: Math.floor(y / TILE_SIZE)
+      col: Math.floor((x - this.offsetX) / TILE_SIZE),
+      row: Math.floor((y - this.offsetY) / TILE_SIZE)
     };
+  }
+
+  getOffset(): { x: number; y: number } {
+    return { x: this.offsetX, y: this.offsetY };
   }
 
   getPathTiles(): Array<{ col: number; row: number }> {

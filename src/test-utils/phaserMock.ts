@@ -61,6 +61,8 @@ class ContainerStub {
 
 export function createGraphicsStub() {
   return {
+    x: 0,
+    y: 0,
     clear: vi.fn(),
     fillStyle: vi.fn(),
     fillRect: vi.fn(),
@@ -72,12 +74,18 @@ export function createGraphicsStub() {
     arc: vi.fn(),
     closePath: vi.fn(),
     fillPath: vi.fn(),
+    setPosition: vi.fn(function (this: any, x: number, y: number) {
+      this.x = x;
+      this.y = y;
+      return this;
+    }),
     destroy: vi.fn()
   };
 }
 
 export function createTextStub(text: string = '') {
   const listeners: Record<string, Array<(...args: any[]) => void>> = {};
+  const data: Record<string, any> = {};
   const stub: any = {
     text,
     visible: true,
@@ -85,8 +93,14 @@ export function createTextStub(text: string = '') {
     setStroke: vi.fn().mockReturnThis(),
     setVisible: vi.fn().mockReturnThis(),
     setDepth: vi.fn().mockReturnThis(),
+    setColor: vi.fn().mockReturnThis(),
     setScrollFactor: vi.fn().mockReturnThis(),
     setInteractive: vi.fn().mockReturnThis(),
+    setData: vi.fn(function (this: any, key: string, value: any) {
+      data[key] = value;
+      return this;
+    }),
+    getData: vi.fn((key: string) => data[key]),
     setText: vi.fn(function (this: any, t: string) {
       this.text = t;
       return this;

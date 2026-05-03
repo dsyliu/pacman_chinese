@@ -2,20 +2,39 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DataLoader } from '../DataLoader';
 
 const sampleData = {
-  levels: [
+  lessons: [
     {
       id: 1,
-      sentence: '我 你',
-      correctChars: ['愛'],
-      wrongChars: ['恨', '怕'],
-      translation: 'I love you'
+      name: 'Lesson 1',
+      sentences: [
+        {
+          id: 1,
+          sentence: '我 你',
+          correctChars: ['愛'],
+          wrongChars: ['恨', '怕'],
+          translation: 'I love you'
+        },
+        {
+          id: 2,
+          sentence: '今 好',
+          correctChars: ['天'],
+          wrongChars: ['月'],
+          translation: 'Today is good'
+        }
+      ]
     },
     {
       id: 2,
-      sentence: '今 好',
-      correctChars: ['天'],
-      wrongChars: ['月'],
-      translation: 'Today is good'
+      name: 'Lesson 2',
+      sentences: [
+        {
+          id: 1,
+          sentence: '我 媽',
+          correctChars: ['媽'],
+          wrongChars: ['爸'],
+          translation: 'My mom'
+        }
+      ]
     }
   ]
 };
@@ -54,13 +73,13 @@ describe('DataLoader', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('loadData falls back to a default level when fetch fails', async () => {
+  it('loadData falls back to a default lesson when fetch fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
     const consoleErr = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const data = await DataLoader.loadData();
-    expect(data.levels).toHaveLength(1);
-    expect(data.levels[0].correctChars).toEqual(['爱']);
+    expect(data.lessons).toHaveLength(1);
+    expect(data.lessons[0].sentences[0].correctChars).toEqual(['爱']);
     expect(consoleErr).toHaveBeenCalled();
   });
 
@@ -73,39 +92,50 @@ describe('DataLoader', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const data = await DataLoader.loadData();
-    expect(data.levels).toHaveLength(1);
-    expect(data.levels[0].id).toBe(1);
+    expect(data.lessons).toHaveLength(1);
+    expect(data.lessons[0].id).toBe(1);
   });
 
-  it('getLevel returns null when data has not been loaded', () => {
-    expect(DataLoader.getLevel(1)).toBeNull();
+  it('getLesson returns null when data has not been loaded', () => {
+    expect(DataLoader.getLesson(1)).toBeNull();
   });
 
-  it('getLevel finds a level by id after data is loaded', async () => {
+  it('getLesson finds a lesson by id after data is loaded', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => sampleData
     }));
     await DataLoader.loadData();
-    expect(DataLoader.getLevel(2)?.translation).toBe('Today is good');
+    expect(DataLoader.getLesson(2)?.name).toBe('Lesson 2');
   });
 
-  it('getLevel returns null for an unknown id', async () => {
+  it('getLesson returns null for an unknown id', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => sampleData
     }));
     await DataLoader.loadData();
-    expect(DataLoader.getLevel(999)).toBeNull();
+    expect(DataLoader.getLesson(999)).toBeNull();
   });
 
-  it('getAllLevels returns [] before load and the array after', async () => {
-    expect(DataLoader.getAllLevels()).toEqual([]);
+  it('getAllLessons returns [] before load and the array after', async () => {
+    expect(DataLoader.getAllLessons()).toEqual([]);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       json: async () => sampleData
     }));
     await DataLoader.loadData();
-    expect(DataLoader.getAllLevels()).toHaveLength(2);
+    expect(DataLoader.getAllLessons()).toHaveLength(2);
+  });
+
+  it('getLevel returns a sentence by lesson id and sentence id', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => sampleData
+    }));
+    await DataLoader.loadData();
+    expect(DataLoader.getLevel(1, 2)?.translation).toBe('Today is good');
+    expect(DataLoader.getLevel(1, 999)).toBeNull();
+    expect(DataLoader.getLevel(99, 1)).toBeNull();
   });
 });

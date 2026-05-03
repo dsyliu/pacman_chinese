@@ -6,8 +6,14 @@ export interface LevelData {
   translation: string;
 }
 
+export interface LessonData {
+  id: number;
+  name: string;
+  sentences: LevelData[];
+}
+
 export interface GameData {
-  levels: LevelData[];
+  lessons: LessonData[];
 }
 
 export interface CollectedCharacter {

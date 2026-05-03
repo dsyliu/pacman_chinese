@@ -9,9 +9,16 @@ export class SentenceManager {
   private translationText: Phaser.GameObjects.Text | null = null;
   private levelData: LevelData | null = null;
   private collectedChars: CollectedCharacter[] = [];
+  private mazeOffsetX: number = 0;
+  private mazeOffsetY: number = 0;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  setMazeOffset(offset: { x: number; y: number }): void {
+    this.mazeOffsetX = offset.x;
+    this.mazeOffsetY = offset.y;
   }
 
   initialize(levelData: LevelData): void {
@@ -48,10 +55,10 @@ export class SentenceManager {
       this.translationText = null;
     }
 
-    const centerX = BOARD_PIXEL_WIDTH / 2;
+    const centerX = this.mazeOffsetX + BOARD_PIXEL_WIDTH / 2;
     // Anchor to the maze, not the canvas, so portrait (taller canvas)
     // doesn't push the sentence to the bottom under the score panel.
-    const yPosition = BOARD_PIXEL_HEIGHT + 40;
+    const yPosition = this.mazeOffsetY + BOARD_PIXEL_HEIGHT + 40;
 
     // Build the sentence with filled blanks
     let displayText = '';

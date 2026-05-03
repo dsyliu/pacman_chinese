@@ -7,11 +7,12 @@ import { GameStateManager } from '../managers/GameState';
 import { DataLoader } from '../managers/DataLoader';
 import { AudioManager } from '../managers/AudioManager';
 import { ScoreboardManager } from '../managers/ScoreboardManager';
+import { LessonMenuManager } from '../managers/LessonMenuManager';
 import { detectInputMode, detectOrientation } from '../utils/input';
-import { getPanelRect } from '../utils/layout';
-import type { InputMode } from '../utils/input';
+import { getLessonRect, getMazeOffset, getPanelRect } from '../utils/layout';
+import type { InputMode, Orientation } from '../utils/input';
 import { GameState } from '../utils/types';
-import type { LevelData } from '../utils/types';
+import type { LessonData, LevelData } from '../utils/types';
 
 const PACMAN_START_COL = 13;
 const PACMAN_START_ROW = 24;
@@ -26,6 +27,9 @@ export class GameScene extends Phaser.Scene {
   private gameStateManager!: GameStateManager;
   private audioManager!: AudioManager;
   private scoreboardManager!: ScoreboardManager;
+  private lessonMenuManager!: LessonMenuManager;
+  private lessons: LessonData[] = [];
+  private currentLessonId: number = 1;
   private levelData: LevelData | null = null;
   private gameOverText: Phaser.GameObjects.Text | null = null;
   private victoryText: Phaser.GameObjects.Text | null = null;
@@ -35,6 +39,10 @@ export class GameScene extends Phaser.Scene {
   private spaceRestartBound: boolean = false;
   private tapRestartBound: boolean = false;
   private inputMode: InputMode = 'keyboard';
+  private orientation: Orientation = 'landscape';
+  private mazeOffsetX: number = 0;
+  private mazeOffsetY: number = 0;
+  private isRestarting: boolean = false;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -54,44 +62,36 @@ export class GameScene extends Phaser.Scene {
     this.sentenceManager = new SentenceManager(this);
     this.audioManager = new AudioManager(this);
     this.scoreboardManager = new ScoreboardManager(this);
+    this.lessonMenuManager = new LessonMenuManager(this);
 
     const gameData = await DataLoader.loadData();
-    if (gameData.levels.length > 0) {
-      const randomIndex = Math.floor(Math.random() * gameData.levels.length);
-      this.levelData = gameData.levels[randomIndex];
-    } else {
-      this.levelData = null;
+    this.lessons = gameData.lessons ?? [];
+    if (this.lessons.length === 0) {
+      console.error('No level data available');
+      return;
     }
-
+    this.currentLessonId = this.lessons[0].id;
+    this.levelData = this.pickRandomSentence(this.currentLessonId);
     if (!this.levelData) {
       console.error('No level data available');
       return;
     }
 
-    this.maze = new Maze(this, Math.floor(Math.random() * Maze.LAYOUT_COUNT));
+    this.inputMode = detectInputMode();
+    this.orientation = detectOrientation();
+    const offset = getMazeOffset(this.orientation);
+    this.mazeOffsetX = offset.x;
+    this.mazeOffsetY = offset.y;
+    this.sentenceManager.setMazeOffset(offset);
+
+    this.maze = new Maze(this, Math.floor(Math.random() * Maze.LAYOUT_COUNT), offset);
     this.maze.spawnDots(PACMAN_START_COL, PACMAN_START_ROW);
     this.setupPacman();
     this.spawnGhosts();
     this.sentenceManager.initialize(this.levelData);
     this.gameStateManager.initializeLevel(this.levelData.correctChars.length);
 
-    this.inputMode = detectInputMode();
-    const orientation = detectOrientation();
-    const panel = getPanelRect(orientation);
-    const layoutMode = orientation === 'portrait' ? 'horizontal' : 'vertical';
-    this.scoreboardManager.render(panel.x, panel.width, this.inputMode, panel.y, layoutMode);
-    if (this.inputMode === 'touch') {
-      // In horizontal (portrait) panel, the D-pad sits in the right column,
-      // aligned with the CONTROLS header. In vertical (landscape) panel,
-      // the D-pad is centered.
-      const cx = layoutMode === 'horizontal'
-        ? panel.x + panel.width * 0.88
-        : panel.x + panel.width / 2;
-      // Horizontal: D-pad sits in the right column at the body row,
-      // aligned with the CONTROLS body in keyboard mode.
-      const cy = layoutMode === 'horizontal' ? panel.y + 85 : panel.y + 905;
-      this.renderDPad(cx, cy);
-    }
+    this.renderSidePanels();
 
     // Hold the game in MENU until the user dismisses the start splash;
     // this also satisfies the browser autoplay policy on the same gesture.
@@ -100,8 +100,47 @@ export class GameScene extends Phaser.Scene {
     this.showStartSplash();
   }
 
+  private renderSidePanels(): void {
+    const panel = getPanelRect(this.orientation);
+    const layoutMode = this.orientation === 'portrait' ? 'horizontal' : 'vertical';
+    this.scoreboardManager.render(panel.x, panel.width, this.inputMode, panel.y, layoutMode);
+    if (this.inputMode === 'touch') {
+      // In horizontal (portrait) panel, the D-pad sits in the right column,
+      // aligned with the CONTROLS header. In vertical (landscape) panel,
+      // the D-pad is centered.
+      const cx = layoutMode === 'horizontal'
+        ? panel.x + panel.width * 0.88
+        : panel.x + panel.width / 2;
+      const cy = layoutMode === 'horizontal' ? panel.y + 85 : panel.y + 905;
+      this.renderDPad(cx, cy);
+    }
+
+    const lessonRect = getLessonRect(this.orientation);
+    this.lessonMenuManager.render({
+      rect: lessonRect,
+      orientation: this.orientation === 'portrait' ? 'horizontal' : 'vertical',
+      lessons: this.lessons,
+      selectedLessonId: this.currentLessonId,
+      onSelect: (id) => this.selectLesson(id)
+    });
+  }
+
+  private pickRandomSentence(lessonId: number): LevelData | null {
+    const lesson = this.lessons.find(l => l.id === lessonId);
+    if (!lesson || lesson.sentences.length === 0) return null;
+    const idx = Math.floor(Math.random() * lesson.sentences.length);
+    return lesson.sentences[idx];
+  }
+
+  private selectLesson(lessonId: number): void {
+    if (lessonId === this.currentLessonId) return;
+    this.currentLessonId = lessonId;
+    this.lessonMenuManager.setSelected(lessonId);
+    this.restart();
+  }
+
   private showStartSplash(): void {
-    this.startSplashText = this.add.text(BOARD_PIXEL_WIDTH / 2, BOARD_PIXEL_HEIGHT / 2, 'Tap or Press Any Key to Start', {
+    this.startSplashText = this.add.text(this.mazeOffsetX + BOARD_PIXEL_WIDTH / 2, this.mazeOffsetY + BOARD_PIXEL_HEIGHT / 2, 'Tap or Press Any Key to Start', {
       fontSize: '40px',
       color: '#FFFF00',
       fontFamily: 'Arial, sans-serif'
@@ -132,7 +171,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (!this.tapRestartBound) {
-      this.input.on('pointerdown', () => {
+      this.input.on('pointerdown', (_pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) => {
+        // Skip restart when the click hit an interactive object (e.g. a lesson
+        // label) — that handler will run its own logic. Without this gate,
+        // clicking a lesson during GAME_OVER triggers the lesson's own restart
+        // AND the scene-level restart, racing two destroy/recreate cycles and
+        // leaving graphics from both layouts on the canvas.
+        if (currentlyOver && currentlyOver.length > 0) return;
         const s = this.gameStateManager.getState();
         if (s === GameState.GAME_OVER || s === GameState.VICTORY) {
           this.restart();
@@ -252,8 +297,8 @@ export class GameScene extends Phaser.Scene {
     this.scoreboardManager.recordLoss();
 
     if (!this.gameOverText) {
-      const centerX = BOARD_PIXEL_WIDTH / 2;
-      const centerY = BOARD_PIXEL_HEIGHT / 2;
+      const centerX = this.mazeOffsetX + BOARD_PIXEL_WIDTH / 2;
+      const centerY = this.mazeOffsetY + BOARD_PIXEL_HEIGHT / 2;
 
       this.gameOverText = this.add.text(
         centerX,
@@ -296,8 +341,8 @@ export class GameScene extends Phaser.Scene {
     this.scoreboardManager.recordWin();
 
     if (!this.victoryText) {
-      const centerX = BOARD_PIXEL_WIDTH / 2;
-      const centerY = BOARD_PIXEL_HEIGHT / 2;
+      const centerX = this.mazeOffsetX + BOARD_PIXEL_WIDTH / 2;
+      const centerY = this.mazeOffsetY + BOARD_PIXEL_HEIGHT / 2;
 
       this.victoryText = this.add.text(
         centerX,
@@ -368,44 +413,58 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async restart(): Promise<void> {
-    if (this.pacman) {
-      this.pacman.destroy();
+    // Guard against re-entrancy. Lesson-click + scene-pointerdown can both
+    // call restart() in the same frame; without this, the two destroy/create
+    // cycles interleave and leave graphics from the previous layout on the
+    // scene (visible as walls overlapping where dots should be).
+    if (this.isRestarting) return;
+    this.isRestarting = true;
+    try {
+      // Move out of PLAYING so update() stops touching the entities while
+      // they're being torn down and rebuilt.
+      this.gameStateManager.setState(GameState.MENU);
+      this.audioManager.stopBackgroundMusic();
+
+      if (this.pacman) {
+        this.pacman.destroy();
+      }
+
+      this.ghosts.forEach(ghost => ghost && ghost.destroy());
+      this.ghosts = [];
+
+      if (this.maze) {
+        this.maze.destroy();
+      }
+
+      if (this.gameOverText) this.gameOverText.setVisible(false);
+      if (this.victoryText) this.victoryText.setVisible(false);
+      if (this.gameOverRestartText) this.gameOverRestartText.setVisible(false);
+      if (this.victoryRestartText) this.victoryRestartText.setVisible(false);
+
+      const gameData = await DataLoader.loadData();
+      this.lessons = gameData.lessons ?? this.lessons;
+      this.levelData = this.pickRandomSentence(this.currentLessonId);
+      if (!this.levelData) {
+        console.error('No level data available');
+        return;
+      }
+
+      this.gameStateManager.reset();
+
+      this.maze = new Maze(
+        this,
+        Math.floor(Math.random() * Maze.LAYOUT_COUNT),
+        { x: this.mazeOffsetX, y: this.mazeOffsetY }
+      );
+      this.maze.spawnDots(PACMAN_START_COL, PACMAN_START_ROW);
+      this.setupPacman();
+      this.spawnGhosts();
+      this.sentenceManager.initialize(this.levelData);
+      this.gameStateManager.initializeLevel(this.levelData.correctChars.length);
+
+      this.audioManager.playBackgroundMusic();
+    } finally {
+      this.isRestarting = false;
     }
-
-    this.ghosts.forEach(ghost => ghost && ghost.destroy());
-    this.ghosts = [];
-
-    if (this.maze) {
-      this.maze.destroy();
-    }
-
-    if (this.gameOverText) this.gameOverText.setVisible(false);
-    if (this.victoryText) this.victoryText.setVisible(false);
-    if (this.gameOverRestartText) this.gameOverRestartText.setVisible(false);
-    if (this.victoryRestartText) this.victoryRestartText.setVisible(false);
-
-    const gameData = await DataLoader.loadData();
-    if (gameData.levels.length > 0) {
-      const randomIndex = Math.floor(Math.random() * gameData.levels.length);
-      this.levelData = gameData.levels[randomIndex];
-    } else {
-      this.levelData = null;
-    }
-
-    if (!this.levelData) {
-      console.error('No level data available');
-      return;
-    }
-
-    this.gameStateManager.reset();
-
-    this.maze = new Maze(this, Math.floor(Math.random() * Maze.LAYOUT_COUNT));
-    this.maze.spawnDots(PACMAN_START_COL, PACMAN_START_ROW);
-    this.setupPacman();
-    this.spawnGhosts();
-    this.sentenceManager.initialize(this.levelData);
-    this.gameStateManager.initializeLevel(this.levelData.correctChars.length);
-
-    this.audioManager.playBackgroundMusic();
   }
 }

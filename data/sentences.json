@@ -1,32 +1,106 @@
 {
-  "levels": [
+  "lessons": [
     {
       "id": 1,
-      "sentence": "一 三 五",
-      "correctChars": ["二", "四"],
-      "wrongChars": ["六", "七", "八", "九", "十"],
-      "translation": "One two three four five"
+      "name": "Lesson 1",
+      "sentences": [
+        {
+          "id": 1,
+          "sentence": "一 三 五",
+          "correctChars": ["二", "四"],
+          "wrongChars": ["六", "七", "八", "九", "十"],
+          "translation": "One two three four five"
+        },
+        {
+          "id": 2,
+          "sentence": "這是 書",
+          "correctChars": ["本"],
+          "wrongChars": ["個", "隻", "條", "張", "把"],
+          "translation": "This is a book"
+        },
+        {
+          "id": 3,
+          "sentence": "一星期有  ",
+          "correctChars": ["七", "天"],
+          "wrongChars": ["三", "十", "友", "百", "千"],
+          "translation": "There are seven days in a week"
+        },
+        {
+          "id": 4,
+          "sentence": "我考  分",
+          "correctChars": ["一", "百"],
+          "wrongChars": ["學", "有", "上", "歲", "朋"],
+          "translation": "I scored 100 on the test"
+        }
+      ]
     },
     {
       "id": 2,
-      "sentence": "這是 書",
-      "correctChars": ["本"],
-      "wrongChars": ["個", "隻", "條", "張", "把"],
-      "translation": "This is a book"
+      "name": "Lesson 2",
+      "sentences": [
+        {
+          "id": 1,
+          "sentence": "你叫什麽  ",
+          "correctChars": ["名", "字"],
+          "wrongChars": ["大", "小", "好", "他", "在"],
+          "translation": "What is your name?"
+        },
+        {
+          "id": 2,
+          "sentence": "媽媽是 師",
+          "correctChars": ["老"],
+          "wrongChars": ["朋", "學", "前", "工", "好"],
+          "translation": "Mom is a teacher"
+        },
+        {
+          "id": 3,
+          "sentence": "我愛 媽",
+          "correctChars": ["媽"],
+          "wrongChars": ["哥", "弟", "姐", "我", "你"],
+          "translation": "I love my mom"
+        },
+        {
+          "id": 4,
+          "sentence": "小 在天上飛",
+          "correctChars": ["鳥"],
+          "wrongChars": ["魚", "牛", "馬", "狗", "隻"],
+          "translation": "Birds fly in the sky"
+        }
+      ]
     },
     {
       "id": 3,
-      "sentence": "一星期有  ",
-      "correctChars": ["七", "天"],
-      "wrongChars": ["三", "十", "友", "百", "千"],
-      "translation": "There are seven days in a week"
-    },
-    {
-      "id": 4,
-      "sentence": "我考  分",
-      "correctChars": ["一", "百"],
-      "wrongChars": ["學","有", "上", "歲", "朋"],
-      "translation": "I scored 100 on the test"
+      "name": "Lesson 3",
+      "sentences": [
+        {
+          "id": 1,
+          "sentence": "  報紙",
+          "correctChars": ["中", "文"],
+          "wrongChars": ["英", "申", "看", "字", "奇"],
+          "translation": "Chinese newspaper"
+        },
+        {
+          "id": 2,
+          "sentence": "貪 的國 ",
+          "correctChars": ["心", "王"],
+          "wrongChars": ["小", "雪", "他", "東", "西"],
+          "translation": "Greedy king"
+        },
+        {
+          "id": 3,
+          "sentence": "十的  就是五",
+          "correctChars": ["一", "半"],
+          "wrongChars": ["書", "筆", "妹", "拿", "起"],
+          "translation": "Five is half of ten"
+        },
+        {
+          "id": 4,
+          "sentence": "妹妹有  筆",
+          "correctChars": ["許", "多"],
+          "wrongChars": ["半", "站", "起", "來", "天"],
+          "translation": "My sister has many pens"
+        }
+      ]
     }
   ]
 }

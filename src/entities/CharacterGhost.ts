@@ -58,11 +58,11 @@ export class CharacterGhost extends Phaser.GameObjects.Container {
   }
 
   getGridX(): number {
-    return Math.floor(this.x / TILE_SIZE);
+    return this.maze.worldToTile(this.x, this.y).col;
   }
 
   getGridY(): number {
-    return Math.floor(this.y / TILE_SIZE);
+    return this.maze.worldToTile(this.x, this.y).row;
   }
 
   getWorldPosition(): Phaser.Math.Vector2 {
@@ -73,10 +73,10 @@ export class CharacterGhost extends Phaser.GameObjects.Container {
     if (this.collected) return;
 
     const moveStep = this.speed * delta / 1000;
-    const col = Math.floor(this.x / TILE_SIZE);
-    const row = Math.floor(this.y / TILE_SIZE);
-    const tcx = col * TILE_SIZE + TILE_SIZE / 2;
-    const tcy = row * TILE_SIZE + TILE_SIZE / 2;
+    const { col, row } = this.maze.worldToTile(this.x, this.y);
+    const center = this.maze.tileToWorld(col, row);
+    const tcx = center.x;
+    const tcy = center.y;
     const tol = Math.max(moveStep, 3);
     const atCenter = Math.abs(this.x - tcx) <= tol && Math.abs(this.y - tcy) <= tol;
 

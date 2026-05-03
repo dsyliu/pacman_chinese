@@ -182,6 +182,24 @@ describe('Maze class', () => {
     }
   });
 
+  it('tileToWorld and worldToTile apply the maze offset', () => {
+    const scene = createSceneStub();
+    const offset = { x: 128, y: 60 };
+    const m = new Maze(scene as any, 0, offset);
+    expect(m.tileToWorld(0, 0)).toEqual({
+      x: offset.x + TILE_SIZE / 2,
+      y: offset.y + TILE_SIZE / 2
+    });
+    expect(m.tileToWorld(2, 3)).toEqual({
+      x: offset.x + 2 * TILE_SIZE + TILE_SIZE / 2,
+      y: offset.y + 3 * TILE_SIZE + TILE_SIZE / 2
+    });
+    // Round-trip a tile center through worldToTile.
+    const w = m.tileToWorld(13, 24);
+    expect(m.worldToTile(w.x, w.y)).toEqual({ col: 13, row: 24 });
+    expect(m.getOffset()).toEqual(offset);
+  });
+
   it('getPathTiles returns every non-wall cell exactly once', () => {
     const scene = createSceneStub();
     const m = new Maze(scene as any, 0);

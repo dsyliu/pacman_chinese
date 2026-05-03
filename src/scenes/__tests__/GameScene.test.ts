@@ -19,6 +19,12 @@ const sampleLevel = {
   translation: 'sample'
 };
 
+const sampleLesson = {
+  id: 1,
+  name: 'Lesson 1',
+  sentences: [sampleLevel]
+};
+
 function attachSceneStubs(scene: GameScene) {
   const stub = createSceneStub();
   Object.assign(scene, {
@@ -30,7 +36,7 @@ function attachSceneStubs(scene: GameScene) {
 }
 
 async function buildGame(opts: { autoStart?: boolean; portrait?: boolean } = {}) {
-  vi.spyOn(DataLoader, 'loadData').mockResolvedValue({ levels: [sampleLevel] });
+  vi.spyOn(DataLoader, 'loadData').mockResolvedValue({ lessons: [sampleLesson] });
   vi.stubGlobal('AudioContext', vi.fn(() => ({
     currentTime: 0,
     destination: {},
@@ -122,7 +128,7 @@ describe('GameScene', () => {
   });
 
   it('logs an error and returns when level data is empty', async () => {
-    vi.spyOn(DataLoader, 'loadData').mockResolvedValue({ levels: [] });
+    vi.spyOn(DataLoader, 'loadData').mockResolvedValue({ lessons: [] });
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
     const scene = new GameScene();
     attachSceneStubs(scene);
@@ -215,12 +221,13 @@ describe('GameScene', () => {
     }
   });
 
-  it('end-screen and splash text are centered on the maze midpoint, not the canvas midpoint', async () => {
+  it('end-screen and splash text are centered on the maze midpoint (accounting for maze offset)', async () => {
     const { scene, stub } = await buildGame({ autoStart: false });
+    const expectedX = (scene as any).mazeOffsetX + BOARD_PIXEL_WIDTH / 2;
     const splashCall = (stub.add.text as any).mock.calls.find(
       (c: any[]) => typeof c[2] === 'string' && /Press Any Key to Start/i.test(c[2])
     );
-    expect(splashCall![0]).toBe(BOARD_PIXEL_WIDTH / 2);
+    expect(splashCall![0]).toBe(expectedX);
 
     (scene as any).beginGame();
     const pacman = (scene as any).pacman;
@@ -233,7 +240,7 @@ describe('GameScene', () => {
     const gameOverCall = (stub.add.text as any).mock.calls.find(
       (c: any[]) => typeof c[2] === 'string' && c[2] === 'Game Over!'
     );
-    expect(gameOverCall![0]).toBe(BOARD_PIXEL_WIDTH / 2);
+    expect(gameOverCall![0]).toBe(expectedX);
   });
 
   it('eating a dot via update() increments scoreboard points by 1', async () => {
@@ -409,6 +416,84 @@ describe('GameScene', () => {
 
       expect((scene as any).gameStateManager.getState()).toBe(GameState.PLAYING);
       expect((scene as any).maze).not.toBe(mazeBefore);
+    });
+
+    it('scene pointerdown ignores clicks that hit interactive objects (so lesson clicks do not double-restart)', async () => {
+      const { scene, stub } = await buildGame();
+      // Force GAME_OVER so the scene-level pointerdown would normally restart.
+      const pacman = (scene as any).pacman;
+      const ghosts = (scene as any).ghosts as any[];
+      const wrongGhost = ghosts.find(g => !g.getIsCorrect());
+      wrongGhost.x = pacman.x;
+      wrongGhost.y = pacman.y;
+      scene.update(0, 16);
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.GAME_OVER);
+      const mazeBefore = (scene as any).maze;
+
+      // Emit pointerdown with a non-empty currentlyOver (simulating a click on
+      // an interactive object like a lesson label). The scene-level handler
+      // should bail so it doesn't race with the object's own click handler.
+      stub._emitInput('pointerdown', { x: 50, y: 50 }, [{}]);
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.GAME_OVER);
+      expect((scene as any).maze).toBe(mazeBefore);
+    });
+
+    it('clicking a different lesson during PLAYING rebuilds the maze with the new lesson and gates update during the rebuild', async () => {
+      const lesson2 = {
+        id: 2,
+        name: 'Lesson 2',
+        sentences: [
+          {
+            id: 1,
+            sentence: ' Y',
+            correctChars: ['Q'],
+            wrongChars: ['Z'],
+            translation: 'lesson two'
+          }
+        ]
+      };
+      const sampleLessonLocal = {
+        id: 1,
+        name: 'Lesson 1',
+        sentences: [{
+          id: 1,
+          sentence: ' b',
+          correctChars: ['X'],
+          wrongChars: ['Y', 'Z'],
+          translation: 'sample'
+        }]
+      };
+      vi.spyOn(DataLoader, 'loadData').mockResolvedValue({ lessons: [sampleLessonLocal, lesson2] });
+      vi.stubGlobal('AudioContext', vi.fn(() => ({
+        currentTime: 0, sampleRate: 44100, destination: {},
+        createOscillator: () => ({ type: '', frequency: { value: 0 }, connect: () => {}, start: () => {}, stop: () => {} }),
+        createGain: () => ({ gain: { value: 1, setValueAtTime: () => {}, linearRampToValueAtTime: () => {}, exponentialRampToValueAtTime: () => {}, cancelScheduledValues: () => {} }, connect: () => {} }),
+        createBuffer: (c: number, s: number, r: number) => ({ numberOfChannels: c, length: s, sampleRate: r, getChannelData: () => new Float32Array(s) }),
+        createBufferSource: () => ({ buffer: null, loop: false, connect: () => {}, disconnect: () => {}, start: () => {}, stop: () => {} })
+      })));
+      const scene = new GameScene();
+      const stub = createSceneStub();
+      Object.assign(scene, { add: stub.add, input: stub.input, cameras: stub.cameras });
+      await scene.create();
+      (scene as any).beginGame();
+
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.PLAYING);
+      const mazeBefore = (scene as any).maze;
+
+      // Trigger the lesson-2 click via the LessonMenuManager item directly.
+      const lesson2Text = (stub.add.text as any).mock.results
+        .map((r: any) => r.value)
+        .find((t: any) => t.text === 'Lesson 2');
+      expect(lesson2Text).toBeDefined();
+      lesson2Text._emit('pointerdown');
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect((scene as any).maze).not.toBe(mazeBefore);
+      expect((scene as any).currentLessonId).toBe(2);
+      expect((scene as any).levelData.translation).toBe('lesson two');
+      expect((scene as any).gameStateManager.getState()).toBe(GameState.PLAYING);
     });
 
     function stubTouchMode() {
