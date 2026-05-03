@@ -4,13 +4,10 @@ import { AudioManager } from '../AudioManager';
 let oscStarts: any[] = [];
 let oscStops: any[] = [];
 let connections: any[] = [];
-let bufferSourceStarts: any[] = [];
-let bufferSourceStops: any[] = [];
 
 function makeMockAudioContext() {
   const ctx = {
     currentTime: 0,
-    sampleRate: 44100,
     destination: { name: 'dest' },
     createOscillator: vi.fn(() => {
       const o: any = {
@@ -34,25 +31,6 @@ function makeMockAudioContext() {
         connect: vi.fn((dest: any) => connections.push(['gain->', dest]))
       };
       return g;
-    }),
-    createBuffer: vi.fn((channels: number, samples: number, rate: number) => {
-      return {
-        numberOfChannels: channels,
-        length: samples,
-        sampleRate: rate,
-        getChannelData: vi.fn(() => new Float32Array(samples))
-      };
-    }),
-    createBufferSource: vi.fn(() => {
-      const s: any = {
-        buffer: null,
-        loop: false,
-        connect: vi.fn((dest: any) => connections.push(['bgsrc->', dest])),
-        disconnect: vi.fn(),
-        start: vi.fn((t?: number) => bufferSourceStarts.push(t ?? 0)),
-        stop: vi.fn((t?: number) => bufferSourceStops.push(t ?? 0))
-      };
-      return s;
     })
   };
   return ctx;
@@ -65,8 +43,6 @@ describe('AudioManager', () => {
     oscStarts = [];
     oscStops = [];
     connections = [];
-    bufferSourceStarts = [];
-    bufferSourceStops = [];
     ctx = makeMockAudioContext();
     vi.stubGlobal('AudioContext', vi.fn(() => ctx));
     vi.useFakeTimers();
@@ -95,33 +71,30 @@ describe('AudioManager', () => {
     expect(warn).toHaveBeenCalled();
   });
 
-  it('playBackgroundMusic creates a looping AudioBufferSourceNode and starts it', () => {
+  it('playBackgroundMusic schedules notes via oscillators', () => {
     const am = new AudioManager({} as any);
     am.playBackgroundMusic();
-    expect(ctx.createBufferSource).toHaveBeenCalled();
-    expect(bufferSourceStarts.length).toBe(1);
-    const source = ctx.createBufferSource.mock.results[0].value;
-    expect(source.loop).toBe(true);
-    expect(source.buffer).not.toBeNull();
+    expect(ctx.createOscillator).toHaveBeenCalled();
+    expect(oscStarts.length).toBeGreaterThan(0);
   });
 
-  it('playBackgroundMusic builds the background buffer once and reuses it across calls', () => {
+  it('stopBackgroundMusic clears the scheduling interval', () => {
     const am = new AudioManager({} as any);
     am.playBackgroundMusic();
+    const before = ctx.createOscillator.mock.calls.length;
     am.stopBackgroundMusic();
-    am.playBackgroundMusic();
-    // Buffer is synthesized once (lazy) and cached for subsequent plays.
-    expect(ctx.createBuffer).toHaveBeenCalledTimes(1);
-    // But each play creates a fresh BufferSource (a source can only be
-    // started once per the Web Audio spec).
-    expect(ctx.createBufferSource).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(2000);
+    const after = ctx.createOscillator.mock.calls.length;
+    expect(after).toBe(before);
   });
 
-  it('stopBackgroundMusic stops the buffer source so the loop ends', () => {
+  it('playBackgroundMusic re-schedules another pattern when the timer fires', () => {
     const am = new AudioManager({} as any);
     am.playBackgroundMusic();
-    am.stopBackgroundMusic();
-    expect(bufferSourceStops.length).toBe(1);
+    const before = ctx.createOscillator.mock.calls.length;
+    ctx.currentTime = 100;
+    vi.advanceTimersByTime(400);
+    expect(ctx.createOscillator.mock.calls.length).toBeGreaterThan(before);
   });
 
   it('playVictoryMusic plays a short sequence of sine notes', () => {
@@ -139,23 +112,23 @@ describe('AudioManager', () => {
   it('setMuted(true) stops the loop and setMuted(false) restarts it', () => {
     const am = new AudioManager({} as any);
     am.playBackgroundMusic();
-    expect(bufferSourceStarts.length).toBe(1);
-
+    const before = ctx.createOscillator.mock.calls.length;
     am.setMuted(true);
-    expect(bufferSourceStops.length).toBe(1);
+    vi.advanceTimersByTime(2000);
+    expect(ctx.createOscillator.mock.calls.length).toBe(before);
 
     am.setMuted(false);
-    expect(bufferSourceStarts.length).toBe(2);
+    expect(ctx.createOscillator.mock.calls.length).toBeGreaterThan(before);
   });
 
-  it('does not schedule audio while muted', () => {
+  it('does not schedule notes while muted', () => {
     const am = new AudioManager({} as any);
     am.setMuted(true);
+    const before = ctx.createOscillator.mock.calls.length;
     am.playBackgroundMusic();
     am.playVictoryMusic();
     am.playGameOverMusic();
-    expect(ctx.createOscillator).not.toHaveBeenCalled();
-    expect(ctx.createBufferSource).not.toHaveBeenCalled();
+    expect(ctx.createOscillator.mock.calls.length).toBe(before);
   });
 
   it('resume() calls AudioContext.resume() when context is suspended', () => {
@@ -184,53 +157,35 @@ describe('AudioManager', () => {
     expect(resumeFn).not.toHaveBeenCalled();
   });
 
-  it('playBackgroundMusic starts the loop synchronously inside the user gesture even when AudioContext is suspended (Android fix)', () => {
-    // Android Chrome silently drops audio for nodes created OUTSIDE the
-    // originating user gesture. The buffer-source approach lets us start
-    // exactly one node in-gesture and have it loop forever in the audio
-    // thread — no out-of-gesture setInterval scheduling.
+  it('playBackgroundMusic defers scheduling until AudioContext resume resolves (Android first-launch fix)', async () => {
+    let resolveResume: () => void = () => {};
+    const resumePromise = new Promise<void>(r => { resolveResume = r; });
     const suspendedCtx: any = {
       ...makeMockAudioContext(),
       state: 'suspended',
-      resume: vi.fn(() => new Promise(() => {})) // never resolves
+      resume: vi.fn(() => resumePromise)
     };
     vi.stubGlobal('AudioContext', vi.fn(() => suspendedCtx));
 
     const am = new AudioManager({} as any);
     am.playBackgroundMusic();
+    // Resume hasn't resolved yet → must NOT schedule notes against a
+    // still-suspended currentTime, otherwise on Android they fire silently.
+    expect(suspendedCtx.createOscillator).not.toHaveBeenCalled();
 
-    // Resume requested + buffer source created and started, all synchronously.
-    expect(suspendedCtx.resume).toHaveBeenCalled();
-    expect(suspendedCtx.createBufferSource).toHaveBeenCalledTimes(1);
-    expect(bufferSourceStarts.length).toBe(1);
+    suspendedCtx.state = 'running';
+    resolveResume();
+    // Flush enough microtask hops to drain the resume().then().catch() chain.
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+
+    expect(suspendedCtx.createOscillator).toHaveBeenCalled();
   });
 
-  it('playBackgroundMusic primes the audio pipeline with a zero-gain warmup oscillator inside the user gesture (Android fix)', () => {
-    // The warmup ensures Android sees audio creation inside the gesture
-    // before the buffer source is wired up.
-    const suspendedCtx: any = {
-      ...makeMockAudioContext(),
-      state: 'suspended',
-      resume: vi.fn(() => new Promise(() => {}))
-    };
-    vi.stubGlobal('AudioContext', vi.fn(() => suspendedCtx));
-
+  it('stopBackgroundMusic ramps the master gain to zero so queued notes go silent', () => {
     const am = new AudioManager({} as any);
     am.playBackgroundMusic();
-
-    // First gain node belongs to the warmup and must be zero-gain so it
-    // doesn't actually emit sound.
-    const warmupGain = suspendedCtx.createGain.mock.results[0].value;
-    expect(warmupGain.gain.value).toBe(0);
-  });
-
-  it('stopBackgroundMusic ramps the master gain to zero so the loop goes silent', () => {
-    const am = new AudioManager({} as any);
-    am.playBackgroundMusic();
-    // First createGain call is the warmup oscillator's gain. The bg master
-    // gain is the second createGain call, created right before the buffer
-    // source is wired up.
-    const masterGain = ctx.createGain.mock.results[1].value;
+    // The first createGain call is the bg master gain (created before any notes)
+    const masterGain = ctx.createGain.mock.results[0].value;
     am.stopBackgroundMusic();
     expect(masterGain.gain.cancelScheduledValues).toHaveBeenCalled();
     const rampCalls = masterGain.gain.linearRampToValueAtTime.mock.calls;

@@ -1,55 +1,14 @@
 import Phaser from 'phaser';
 
-interface AudioDebugInfo {
-  resumeAttempts: number;
-  suspendedAtPlayCount: number;
-  startCalls: number;
-  stopCalls: number;
-  warmupCalls: number;
-  bufferBuilt: boolean;
-  lastResumeError: string;
-}
-
-export interface AudioDebugSnapshot extends AudioDebugInfo {
-  state: string;
-  currentTime: number;
-  isMuted: boolean;
-}
-
 export class AudioManager {
   private isMuted: boolean = false;
   private audioContext: AudioContext | null = null;
+  private backgroundMusicInterval: number | null = null;
+  private nextPatternTime: number = 0;
   private bgMasterGain: GainNode | null = null;
-  private bgBuffer: AudioBuffer | null = null;
-  private bgSource: AudioBufferSourceNode | null = null;
-  private debugInfo: AudioDebugInfo = {
-    resumeAttempts: 0,
-    suspendedAtPlayCount: 0,
-    startCalls: 0,
-    stopCalls: 0,
-    warmupCalls: 0,
-    bufferBuilt: false,
-    lastResumeError: ''
-  };
 
   constructor(_scene: Phaser.Scene) {
     this.initializeAudio();
-    // Pre-build the music buffer at construction so playBackgroundMusic
-    // does no synthesis inside the user gesture — only node creation +
-    // start(), keeping the in-gesture work as small as possible.
-    if (this.audioContext) {
-      this.bgBuffer = this.buildBackgroundBuffer();
-      this.debugInfo.bufferBuilt = this.bgBuffer !== null;
-    }
-  }
-
-  getDebugSnapshot(): AudioDebugSnapshot {
-    return {
-      state: this.audioContext?.state ?? 'no-ctx',
-      currentTime: this.audioContext?.currentTime ?? 0,
-      isMuted: this.isMuted,
-      ...this.debugInfo
-    };
   }
 
   private initializeAudio(): void {
@@ -96,14 +55,37 @@ export class AudioManager {
     }
   }
 
-  private buildBackgroundBuffer(): AudioBuffer | null {
-    if (!this.audioContext) return null;
+  private playNote(
+    frequency: number,
+    startTime: number,
+    duration: number,
+    gain: number = 0.08,
+    type: OscillatorType = 'square',
+    destination?: AudioNode
+  ): void {
+    if (!this.audioContext) return;
+    const osc = this.audioContext.createOscillator();
+    const g = this.audioContext.createGain();
+    osc.connect(g);
+    g.connect(destination ?? this.audioContext.destination);
+    osc.type = type;
+    osc.frequency.value = frequency;
+    g.gain.setValueAtTime(0, startTime);
+    g.gain.linearRampToValueAtTime(gain, startTime + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.02);
+  }
 
-    // 16-note upbeat I-vi-IV-V arpeggio (~1.6 s) pre-rendered into an
-    // AudioBuffer so that playBackgroundMusic only needs to create one
-    // AudioBufferSourceNode (not 16 oscillators per loop). Looping is
-    // handled natively by the source's `loop = true`, which avoids the
-    // out-of-gesture setInterval scheduling that Android Chrome silences.
+  private createBackgroundMusic(): void {
+    if (!this.audioContext) return;
+
+    // Master gain for instant cutoff on stopBackgroundMusic
+    this.bgMasterGain = this.audioContext.createGain();
+    this.bgMasterGain.gain.setValueAtTime(1, this.audioContext.currentTime);
+    this.bgMasterGain.connect(this.audioContext.destination);
+
+    // 16-note upbeat I-vi-IV-V arpeggio loop (~1.6 s)
     const melody = [
       // I  (C):  C  E  G  C5
       261.63, 329.63, 392.00, 523.25,
@@ -114,40 +96,27 @@ export class AudioManager {
       // V  (G):  G  B  D5 G5
       392.00, 493.88, 587.33, 783.99
     ];
-    const noteSlot = 0.10;
-    const playFraction = 0.85;
-    const fadeIn = 0.004;
-    const peakGain = 0.08;
-    const sampleRate = this.audioContext.sampleRate;
-    const samplesPerSlot = Math.max(1, Math.floor(noteSlot * sampleRate));
-    const playSamples = Math.floor(noteSlot * playFraction * sampleRate);
-    const fadeInSamples = Math.max(1, Math.floor(fadeIn * sampleRate));
-    const totalSamples = melody.length * samplesPerSlot;
 
-    const buffer = this.audioContext.createBuffer(1, totalSamples, sampleRate);
-    const data = buffer.getChannelData(0);
+    const noteDuration = 0.10;
+    const patternDuration = melody.length * noteDuration;
 
-    for (let n = 0; n < melody.length; n++) {
-      const freq = melody[n];
-      const noteStart = n * samplesPerSlot;
-      const period = sampleRate / freq;
-      for (let i = 0; i < samplesPerSlot; i++) {
-        if (i >= playSamples) break;
-        // Square wave from sample-aligned phase to avoid drift between notes.
-        const square = (i % period) < period / 2 ? 1 : -1;
-        let env: number;
-        if (i < fadeInSamples) {
-          env = peakGain * (i / fadeInSamples);
-        } else {
-          // Exponential decay from peakGain to ~0.001 over the rest of the
-          // play window — same shape the oscillator path used.
-          const decayProgress = (i - fadeInSamples) / Math.max(1, playSamples - fadeInSamples);
-          env = peakGain * Math.pow(0.001 / peakGain, decayProgress);
-        }
-        data[noteStart + i] = square * env;
+    const schedulePattern = (startTime: number) => {
+      melody.forEach((freq, i) => {
+        this.playNote(freq, startTime + i * noteDuration, noteDuration * 0.85, 0.08, 'square', this.bgMasterGain!);
+      });
+    };
+
+    this.nextPatternTime = this.audioContext.currentTime + 0.05;
+    schedulePattern(this.nextPatternTime);
+    this.nextPatternTime += patternDuration;
+
+    this.backgroundMusicInterval = window.setInterval(() => {
+      if (this.isMuted || !this.audioContext) return;
+      if (this.nextPatternTime - this.audioContext.currentTime < 0.4) {
+        schedulePattern(this.nextPatternTime);
+        this.nextPatternTime += patternDuration;
       }
-    }
-    return buffer;
+    }, 200);
   }
 
   private createVictoryMusic(): void {
@@ -213,59 +182,30 @@ export class AudioManager {
 
     this.stopBackgroundMusic();
 
-    this.warmupAudioPipeline();
-
-    if (this.audioContext.state === 'suspended') {
-      this.debugInfo.suspendedAtPlayCount++;
-      if (typeof this.audioContext.resume === 'function') {
-        this.debugInfo.resumeAttempts++;
-        this.audioContext.resume().catch((err) => {
-          this.debugInfo.lastResumeError = String(err);
+    // On Android (and any browser with a stricter autoplay policy) the
+    // AudioContext starts suspended. Scheduling notes against its
+    // not-yet-running currentTime makes them fire silently, so defer the
+    // scheduling until resume() actually resolves.
+    if (this.audioContext.state === 'suspended' && typeof this.audioContext.resume === 'function') {
+      this.audioContext.resume()
+        .then(() => {
+          if (!this.isMuted && this.audioContext) {
+            this.createBackgroundMusic();
+          }
+        })
+        .catch(() => {
+          // ignore — user gesture will retry on next interaction
         });
-      }
+      return;
     }
 
-    if (!this.bgBuffer) {
-      this.bgBuffer = this.buildBackgroundBuffer();
-      this.debugInfo.bufferBuilt = this.bgBuffer !== null;
-    }
-    if (!this.bgBuffer) return;
-
-    this.bgMasterGain = this.audioContext.createGain();
-    this.bgMasterGain.gain.setValueAtTime(1, this.audioContext.currentTime);
-    this.bgMasterGain.connect(this.audioContext.destination);
-
-    this.bgSource = this.audioContext.createBufferSource();
-    this.bgSource.buffer = this.bgBuffer;
-    this.bgSource.loop = true;
-    this.bgSource.connect(this.bgMasterGain);
-    this.bgSource.start();
-    this.debugInfo.startCalls++;
-  }
-
-  private warmupAudioPipeline(): void {
-    if (!this.audioContext) return;
-    try {
-      const osc = this.audioContext.createOscillator();
-      const g = this.audioContext.createGain();
-      g.gain.value = 0;
-      osc.connect(g);
-      g.connect(this.audioContext.destination);
-      const t = this.audioContext.currentTime;
-      osc.start(t);
-      osc.stop(t + 0.05);
-      this.debugInfo.warmupCalls++;
-    } catch {
-      // ignore — warmup is best-effort
-    }
+    this.createBackgroundMusic();
   }
 
   stopBackgroundMusic(): void {
-    if (this.bgSource) {
-      try { this.bgSource.stop(); } catch { /* already stopped */ }
-      try { this.bgSource.disconnect(); } catch { /* already disconnected */ }
-      this.bgSource = null;
-      this.debugInfo.stopCalls++;
+    if (this.backgroundMusicInterval) {
+      clearInterval(this.backgroundMusicInterval);
+      this.backgroundMusicInterval = null;
     }
     if (this.audioContext && this.bgMasterGain) {
       const now = this.audioContext.currentTime;
